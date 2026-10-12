@@ -42,6 +42,8 @@ VALUE = re.compile(r"\d[.,]\d")                     # a decimal number is a valu
 FILE = re.compile(r"\.(?:dwg|dxf|pdf|png|jpe?g|tiff?)$", re.I)
 EDGE = ",.;:()[]\"'"
 NOTE = re.compile(r"\s*\([^)]*\)$")               # a note set beside a name: S3-P5-160 (L)
+# a size written on the row below a name that ends in a class: KV1-K1/S2 over 22 reads KV1-K1/S2-22
+SIZE_AFTER_CLASS = re.compile(r"^(.+?)(/[A-ZÅÄÖ]{1,3}\d{0,2})-(\d{1,4})$", re.I)
 HEAD = re.compile(r"^[A-ZÅÄÖ]+")
 
 KINDS = ("ledning", "komponent", "klass", "rum", "okänd")
@@ -241,6 +243,11 @@ def register_of_designations(pa) -> dict[str, Any]:
     excluded: Counter = Counter()
 
     def add(name: str, bbox, line: str, count: int = 1, source: str = "reading") -> None:
+        # KV1-K1/S2 over 22 is the takeoff's KV1-K1-22/S2: the takeoff writes the size before the class, as the
+        # sheet does where it writes the label on one line, and both ways of writing it are one entry
+        m = SIZE_AFTER_CLASS.match(name)
+        if m:
+            name = f"{m.group(1)}-{m.group(3)}{m.group(2)}"
         key = name.upper()
         e = found.setdefault(key, {"name": name, "labels": 0, "count": 0, "places": [], "sources": set()})
         e["labels"] += 1
