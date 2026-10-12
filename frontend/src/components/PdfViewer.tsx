@@ -10,7 +10,15 @@ import { type Pt, type Snap, type SnapSettings, constrain, defaultSnaps, snapPoi
 import { frontierColor, frontierText } from "../frontier";
 import { InkIndex } from "../cad/pagesnap";
 
-export type Layer = "pipes" | "ambiguous" | "claimed" | "unowned" | "declined" | "designations" | "legend" | "leaders" | "anchors" | "inWall" | "frontiers" | "confidence";
+export type Layer = "pipes" | "ambiguous" | "claimed" | "unowned" | "declined" | "designations" | "legend" | "leaders" | "anchors" | "inWall" | "frontiers" | "confidence" | "register";
+
+/** One designation of the register "Alla" writes (register.py): its kind, its places, and the lines a run of another
+ *  discipline was measured on. */
+export type RegisterEntry = { name: string; kind: string; unit?: string; quantity?: number; state: string;
+                              places?: { bbox: number[] }[]; runs?: number[][][] };
+// the marked PDF's colours for the register (output/overlays.py KIND_COLORS), so the sheet and the PDF agree
+const KIND_COLOR: Record<string, string> = { ledning: "#004dff", komponent: "#008040", klass: "#8c4d00", rum: "#008c99",
+                                             "okänd": "#d95900" };
 
 /* Hur säker läsningen är på ett mätt rör: grönt en egen etikett, gult härlett ur ritningens logik, rött att granska. */
 const TIER_COLOR: Record<string, string> = { sure: "#16a34a", inferred: "#f59e0b", review: "#dc2626" };
@@ -76,6 +84,10 @@ export interface ViewerProps {
   /** Another discipline's run in "Alla", measured in the widened reading and picked: the takeoff has no pipe for
    *  it, so its own lines are lit. */
   markedRuns?: number[][][] | null;
+  /** In "Alla": every designation the sheet writes, framed in its kind's colour, and the runs of other disciplines
+   *  drawn where they were measured (layer "register"). A frame picked opens its row. */
+  register?: { entries: RegisterEntry[] } | null;
+  onRegisterPick?: (name: string) => void;
   layers: Record<Layer, boolean>;
   onPipeClick: (pipe: any) => void;
   /** A click on ink with no edit mode active: what the reading made of it. */
@@ -1042,6 +1054,33 @@ const PdfViewer = forwardRef<ViewerHandle, ViewerProps>(function PdfViewer(props
                   strokeWidth={sw(1)} strokeDasharray={d.names_a_pipe ? undefined : `${sw(3)} ${sw(2)}`} />
               );
             })}
+            {/* "Alla": every designation the sheet writes, framed in its kind's colour as in the marked PDF - dashed
+                where it is to be reviewed - and the runs of other disciplines drawn where they were measured, dashed
+                in the colour of a run. Nothing the register holds is left off the sheet. */}
+            {props.layers.register && props.register && (
+              <g>
+                {props.register.entries.flatMap((e, i) => (e.runs ?? []).map((pl, k) => (
+                  <polyline key={`rr${i}-${k}`} points={pl.map((q) => q.join(",")).join(" ")} fill="none"
+                    stroke={KIND_COLOR.ledning} strokeWidth={sw(4)} strokeOpacity={0.85}
+                    strokeDasharray={`${sw(7)} ${sw(4)}`} strokeLinecap="round" strokeLinejoin="round"
+                    style={{ pointerEvents: "none" }} />
+                )))}
+                {props.register.entries.flatMap((e, i) => (e.places ?? []).map((p, k) => {
+                  const c = KIND_COLOR[e.kind] ?? "#6b7280";
+                  const b = p.bbox;
+                  return (
+                    <rect key={`rp${i}-${k}`} x={b[0] - 1.5} y={b[1] - 1.5} width={b[2] - b[0] + 3} height={b[3] - b[1] + 3}
+                      fill={c} fillOpacity={0.1} stroke={c} strokeWidth={sw(1.4)}
+                      strokeDasharray={e.state === "säker" ? undefined : `${sw(3)} ${sw(2)}`}
+                      style={{ pointerEvents: kind === "erase" || kind === "draw" ? "none" : "all",
+                               cursor: props.onRegisterPick ? "pointer" : undefined }}
+                      onClick={() => props.onRegisterPick?.(e.name)}>
+                      <title>{`${e.name} · ${e.kind}${e.quantity != null ? ` · ${e.quantity} ${e.unit ?? ""}` : ""}`}</title>
+                    </rect>
+                  );
+                }))}
+              </g>
+            )}
             {/* Every label on the sheet coloured by what the drawing's own designation list says its code is: a
                 pipe system, a fitting, a material - or nothing, when the list does not carry the code at all.
                 It is the fastest way to see whether the list was read the way the sheet meant it. */}

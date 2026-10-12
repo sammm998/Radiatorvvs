@@ -222,3 +222,17 @@ def test_a_note_beside_a_name_is_not_part_of_it():
     assert set(E) == {"S3-P5-110"}, set(E)
     assert (E["S3-P5-110"]["quantity"], E["S3-P5-110"]["labels"]) == (4.8, 2)
     assert sorted(p["line"] for p in E["S3-P5-110"]["places"]) == ["S3-P5-110", "S3-P5-110 (L)"]
+
+
+def test_a_name_with_its_size_on_the_row_below_is_the_takeoffs_name():
+    """KV1-K1/S2 over 22 reads KV1-K1/S2-22; the takeoff writes it KV1-K1-22/S2, the size before the class, as the
+    sheet does where it writes the label on one line. Both ways of writing it are one entry with the takeoff's
+    metres, and a valve's tag with a second size (SAV102-20/25) is left as it is written."""
+    reg = register_of_designations(_pa(
+        designations=[_d("KV1-K1/S2-22", 100, 100), _d("KV1-K1-22/S2", 300, 100), _d("VV1-K1/S3-22", 500, 100),
+                      _d("SAV102-20/25", 700, 100)],
+        quantities=[_q("KV1-K1-22/S2", 32.3), _q("VV1-K1-22/S3", 24.47)]))
+    E = {e["name"]: e for e in reg["entries"]}
+    assert set(E) == {"KV1-K1-22/S2", "VV1-K1-22/S3", "SAV102-20/25"}, set(E)
+    assert (E["KV1-K1-22/S2"]["kind"], E["KV1-K1-22/S2"]["quantity"], E["KV1-K1-22/S2"]["labels"]) == ("ledning", 32.3, 2)
+    assert (E["VV1-K1-22/S3"]["kind"], E["VV1-K1-22/S3"]["quantity"]) == ("ledning", 24.47)

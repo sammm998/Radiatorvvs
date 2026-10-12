@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 
 import { lang, num, t as tr, trf } from "../i18n";
 /* Varje beteckning bladet skriver, oavsett disciplin - läget "Alla".
@@ -72,16 +72,26 @@ const spanOfRuns = (runs: number[][][]) => {
     Math.max(...pts.map((p) => p[0])), Math.max(...pts.map((p) => p[1]))] : null;
 };
 
-export default function AllDesignations({ register, onZoom, onShowPipe, onShowRuns }: {
+export default function AllDesignations({ register, onZoom, onShowPipe, onShowRuns, focus }: {
   register: Register;
   onZoom: (bbox: number[]) => void;
   onShowPipe?: (designation: string) => void;
   onShowRuns?: (runs: number[][][], bbox: number[]) => void;   // another discipline's run: its own lines
+  focus?: { name: string; at: number } | null;                  // a frame picked on the sheet: its row, opened
 }) {
   const [q, setQ] = useState("");
   const [kind, setKind] = useState("alla");
   const [state, setState] = useState("alla");
   const [open, setOpen] = useState<string | null>(null);
+
+  // A frame picked on the sheet opens its row here, with nothing filtered away in front of it.
+  useEffect(() => {
+    const e = focus ? (register.entries ?? []).find((x) => x.name === focus.name) : null;
+    if (!e) return;
+    const key = `${e.kind}/${e.name}`;
+    setQ(""); setKind("alla"); setState("alla"); setOpen(key);
+    window.setTimeout(() => document.querySelector(`[data-entry="${CSS.escape(key)}"]`)?.scrollIntoView({ block: "center" }), 50);
+  }, [focus, register]);
 
   const shown = useMemo(() => (register.entries ?? []).filter((e) => {
     if (kind !== "alla" && e.kind !== kind) return false;
@@ -151,7 +161,7 @@ export default function AllDesignations({ register, onZoom, onShowPipe, onShowRu
                 const isOpen = open === key;
                 return (
                   <Fragment key={key}>
-                    <tr className={isOpen ? "open" : ""} onClick={() => setOpen(isOpen ? null : key)}>
+                    <tr className={isOpen ? "open" : ""} data-entry={key} onClick={() => setOpen(isOpen ? null : key)}>
                       <td><b>{e.name}</b></td>
                       <td title={tr(KIND_HINT[e.kind] ?? "")}>
                         <span className={`rolepill ${KIND_CLASS[e.kind] ?? ""}`}>{tr(KIND_SV[e.kind] ?? e.kind)}</span>

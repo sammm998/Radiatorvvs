@@ -47,7 +47,7 @@ const Drawing3DView = lazy(() => import("../components/Drawing3DView").catch((e)
 
 // why a label never got a line to follow, said the way a person reads a drawing
 
-const LAYER_LABELS: Record<Layer, string> = { pipes: "Mätta rör", ambiguous: "Tvetydigt", claimed: "Påpekad men onämnd", unowned: "Oidentifierat", declined: "Bortvald geometri", designations: "Beteckningar", legend: "Förklaringslistan", leaders: "CAD-leaders", anchors: "Anslutningar", inWall: "I vägg (räknas ej)", frontiers: "Var rören slutar", confidence: "Säkerhet (grön/gul/röd)" };
+const LAYER_LABELS: Record<Layer, string> = { pipes: "Mätta rör", ambiguous: "Tvetydigt", claimed: "Påpekad men onämnd", unowned: "Oidentifierat", declined: "Bortvald geometri", designations: "Beteckningar", legend: "Förklaringslistan", leaders: "CAD-leaders", anchors: "Anslutningar", inWall: "I vägg (räknas ej)", frontiers: "Var rören slutar", confidence: "Säkerhet (grön/gul/röd)", register: "Alla beteckningar" };
 const LAYER_HINTS: Record<Layer, string> = {
   pipes: "Sträckor som fått en identitet och en längd, en färg per beteckning",
   ambiguous: "Ritad linje som kunde tillhöra mer än en beteckning — mäts inte",
@@ -60,6 +60,7 @@ const LAYER_HINTS: Record<Layer, string> = {
   anchors: "Där en beteckning faktiskt möter sitt rör",
   confidence: "Färgar varje mätt rör efter hur säker läsningen är: grönt där en egen etikett namnger röret, gult där namnet är härlett ur ritningens logik (fortsätter från ett namngivet rör, självfallsledningens nivåer, värdläsningen), rött där det ska granskas (osäker läsning, namn från AI:ns kontroll eller en flagga från logikkontrollen).",
   frontiers: "Varje kant på varje mätt rör, med skälet: grönt där röret slutar på rätt ställe (annan dimension, annat system, stigare, komponent, bladets kant), rött där läsningen sannolikt tappar meter (samma penna fortsätter utan namn, ett gap som inte överbryggades, byte av penna), orange där något lämnats öppet (tvetydig korsning). Det valda röret visar alltid sina kanter. Inget rör slutar tyst.",
+  register: "Läget Alla: varje beteckning bladet skriver inramad i sitt slags färg, som i den markerade PDF:en: blått ledning, grönt komponent, brunt klass, turkost rum och orange okänd kod. Streckad ram ska granskas. Andra discipliners ledningar ritas streckade där de mättes. Klicka på en ram för att se raden.",
   inWall: "Rör i vägg ritas alltid i det ej räknades färg — längden ligger utanför den horisontella mängden. Etiketter, hänvisningslinjer och anslutningar över en skrafferad yta ritas blekt; det här lagret lyfter fram dem. Ingenting läsningen hittade göms.",
 };
 
@@ -94,6 +95,10 @@ export default function AnalysisPage() {
   const [staff, setStaff] = useState(false);
   useEffect(() => { api.myRole().then((r: any) => setStaff(r?.role === "admin")).catch(() => setStaff(false)); }, []);   // det agenten senast visade, så samma rad inte zoomas om och om
   const [selPipe, setSelPipe] = useState<any>(null);
+  // a frame of "Alla" picked on the sheet: the tab opens on its row
+  const [allFocus, setAllFocus] = useState<{ name: string; at: number } | null>(null);
+  // the layer of "Alla" is offered only where the reading wrote a register
+  const shownLayer = (l: Layer) => l !== "register" || Boolean(result?.all_designations);
   // a run of another discipline picked in "Alla": it has no pipe in the takeoff, so its own lines are lit
   const [wideRun, setWideRun] = useState<number[][][] | null>(null);
   useEffect(() => { if (selIdent !== null || selPipe !== null) setWideRun(null); }, [selIdent, selPipe]);
@@ -169,7 +174,7 @@ export default function AnalysisPage() {
   // The sheet opens showing what was measured. Ink the reading accepted as pipe but no label reached is a real
   // finding and has its own switch - shown first it reads as a fault, and a grey tangle over a good reading is
   // the fastest way to make a correct answer look wrong.
-  const [layers, setLayers] = useState<Record<Layer, boolean>>({ pipes: true, ambiguous: true, claimed: true, unowned: false, declined: false, designations: false, legend: false, leaders: false, anchors: false, inWall: false, frontiers: false, confidence: false });
+  const [layers, setLayers] = useState<Record<Layer, boolean>>({ pipes: true, ambiguous: true, claimed: true, unowned: false, declined: false, designations: false, legend: false, leaders: false, anchors: false, inWall: false, frontiers: false, confidence: false, register: true });
   // which bortvald family the reader is pointing at, so the sheet can show that ink and not all of it at once
   const selDeclined: string | null = null;
   const [layersOpen, setLayersOpen] = useState(false);
@@ -425,7 +430,7 @@ export default function AnalysisPage() {
     return (
       <div className="workspace">
         {viewtabs}
-        <AllDesignations register={result.all_designations}
+        <AllDesignations register={result.all_designations} focus={allFocus}
           onZoom={(b) => { setView("analys"); zoomWhenShown(b); }}
           onShowPipe={(name) => {
             // one name can be several rows, one per size: the one with the most metres is the run to show
@@ -599,11 +604,11 @@ export default function AnalysisPage() {
           <span className="spacer" />
           <div className="layerpop">
             <button className={`secondary small${layersOpen ? " on" : ""}`} onClick={() => setLayersOpen(!layersOpen)}>
-              {tr("Lager")} · {(Object.keys(LAYER_LABELS) as Layer[]).filter((l) => layers[l]).length}
+              {tr("Lager")} · {(Object.keys(LAYER_LABELS) as Layer[]).filter((l) => layers[l] && shownLayer(l)).length}
             </button>
             {layersOpen && (
               <div className="pop" onMouseLeave={() => setLayersOpen(false)}>
-                {(Object.keys(LAYER_LABELS) as Layer[]).map((l) => (
+                {(Object.keys(LAYER_LABELS) as Layer[]).filter(shownLayer).map((l) => (
                   <label key={l} title={LAYER_HINTS[l]}>
                     <input type="checkbox" checked={layers[l]} onChange={(e) => setLayers({ ...layers, [l]: e.target.checked })} />
                     <span>{LAYER_LABELS[l]}</span>
@@ -616,7 +621,8 @@ export default function AnalysisPage() {
         <Boundary what="ritningsvyn"><PdfViewer ref={viewer} data={pdf} page={displayedPage} pipes={pipesOnPage} ambiguous={result.ambiguous_geometry} unowned={result.unowned_geometry} claimed={result.claimed_geometry ?? []}
           designations={result.designations} legend={result.legend ?? null} leaders={result.leaders} anchors={result.anchors} nativeLabels={result.native_labels ?? []} hatched={result.hatched_geometry ?? []} selectedIdentity={selIdent}
           declined={[...(result.declined_geometry?.families ?? []), ...(result.declined_geometry?.unconsidered ?? [])]} selectedDeclined={selDeclined}
-          selectedPipe={selPipe?.physical_pipe_id ?? null} selectedRun={selPipe ? (runs.get(selPipe.physical_pipe_id) ?? null) : null} markedRuns={wideRun} layers={layers} onPipeClick={onPipeClick} onPageCount={setNPages}
+          selectedPipe={selPipe?.physical_pipe_id ?? null} selectedRun={selPipe ? (runs.get(selPipe.physical_pipe_id) ?? null) : null} markedRuns={wideRun} register={result.all_designations ?? null}
+          onRegisterPick={(name) => { setAllFocus({ name, at: Date.now() }); setView("alla"); }} layers={layers} onPipeClick={onPipeClick} onPageCount={setNPages}
           ink={ink} onInkClick={setInk}
           editKind={(tab === "markera"
             ? (markTool ? "draw" : null)

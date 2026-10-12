@@ -355,11 +355,19 @@ med streck kan ha stomlinjernas bokstäver som text, och det gör inte strecken 
 En not bredvid ett namn hör inte till namnet. `S3-P5-110 (L)` är `S3-P5-110`, och noten står kvar på raden där den
 skrivs.
 
+Ett namn som slutar på en klass och har storleken på raden under är mängdens namn. `KV1-K1/S2` över `22` är
+`KV1-K1-22/S2`, som mängden skriver det och som bladet skriver det på en rad, och båda skrivsätten är samma rad med
+mängdens meter. En ventiltagg med två storlekar (`SAV102-20/25`) står kvar som den är skriven.
+
 Ur streck läses ett tecken ibland som sin tvilling. I en kod läst ur streck är ett O mellan två siffror en nolla, så
 `RAD1O1` är `RAD101`, och en nolla mellan två bokstäver är ett O. `M0BIL` är alltså ordet MOBIL och ingen kod.
 
-Registret visas i analysvyns flik "Alla beteckningar", där varje förekomst kan pekas ut på bladet. Det ritas som
-rutor på den markerade PDF:en och exporteras som bladet "Alla beteckningar" i Excel och i JSON-exporten.
+Registret visas i analysvyns flik "Alla beteckningar", där varje förekomst kan pekas ut på bladet. I ritningsvyn
+ritar lagret "Alla beteckningar", som är på från start, in varje beteckning i sitt slags färg, som i den markerade
+PDF:en: blått för ledning, grönt för komponent, brunt för klass, turkost för rum och orange för okänd kod. Ramen är
+streckad där beteckningen ska granskas. Andra discipliners ledningar ritas streckade där de mättes, och ett klick på
+en ram öppnar raden i fliken. Registret ritas också som rutor på den markerade PDF:en och exporteras som bladet "Alla
+beteckningar" i Excel och i JSON-exporten. En VVS-läsning har inget register och inget sådant lager.
 
 **Andra discipliners ledningar** mäts i en andra, vidgad läsning av samma blad (`widened_runs` i `pipeline.py`).
 VVS-läsningen namnger en ledning bara med en kod som bladets lista kallar ett system, och räknar en etikettfamilj som
