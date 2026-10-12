@@ -241,6 +241,8 @@ def register_of_designations(pa) -> dict[str, Any]:
     legend = pa.legend
     found: dict[str, dict] = {}
     excluded: Counter = Counter()
+    # a flow or principle diagram is drawn without a scale: its pipes are measured on the plans, not missed here
+    schematic = getattr(getattr(pa, "scale", None), "reason", None) == "schematic_not_to_scale"
 
     def add(name: str, bbox, line: str, count: int = 1, source: str = "reading") -> None:
         # KV1-K1/S2 over 22 is the takeoff's KV1-K1-22/S2: the takeoff writes the size before the class, as the
@@ -409,7 +411,7 @@ def register_of_designations(pa) -> dict[str, Any]:
             review = sum(float(q.get("review_m") or 0.0) for q in qs)
             sure = quantity > 0 and not review and all(q.get("state") == "CONFIRMED" for q in qs if metres(q) > 0)
             if quantity <= 0:
-                reasons.append("ingen sträcka nådd")
+                reasons.append("schema, mängdas på planritningarna" if schematic else "ingen sträcka nådd")
             elif wide:
                 reasons.append("mätt i den vidgade läsningen, utan referensmängd")
             elif review:
@@ -418,7 +420,7 @@ def register_of_designations(pa) -> dict[str, Any]:
                 reasons.append("tvetydig")
         elif role == "system" or (role is None and _a_whole_pipe_name_of_a_standard_system(name)):
             kind, quantity, sure = "ledning", 0.0, False
-            reasons.append("ingen sträcka nådd")
+            reasons.append("schema, mängdas på planritningarna" if schematic else "ingen sträcka nådd")
         elif _is_fire_class(name):
             kind, quantity, sure = "klass", count, False
         elif role == "material" and "-" not in name:

@@ -51,6 +51,15 @@ rimliga, hänger nätet ihop, håller skalan. De ändrar ingenting; en gransknin
 dölja den oenighet den finns för att visa. En **domare** (`review/judge.py`) går igenom fynden och säger vad som
 ska hända - utan modell, ur artefakterna, så samma läsning dömd två gånger ger samma domar.
 
+**Schemablad.** Ett flödes- eller principschema, som bladet själv kallar schema i en rad som börjar med ordet
+(`FLÖDESSCHEMA`, `PRINCIPSCHEMA`, `SYSTEMSCHEMA`, `FUNKTIONSSCHEMA`), ritas inte i skala. Linjerna visar vad som
+hänger ihop, inte hur långt något är. Ett schema är därför inget misslyckat planblad:
+- omdömet är SCHEMATIC, inte "ofullständig", och andelen rörnamn med meter gäller inte
+- inget av dess rörnamn listas som missat; de står som rören schemat visar, och mängdas på planritningarna
+- vyn frågar inte efter skala, och mängdtabellens rader står som SCHEMA
+- komponenterna räknas, och i "Alla" ramas varje beteckning in
+- läsningen betalas tillbaka som förut, med skälet att bladet är ett schema
+
 **Determinism.** Samma blad läst två gånger ger samma signatur, och ett blad läst mellan två andra påverkas inte
 av dem. Det prövas (`determinism.py`) och det gäller så länge ingen andra läsare kopplas in (se §3).
 
