@@ -301,4 +301,11 @@ export const mangd: Record<string, string> = {
   "Ingen beteckning matchar filtret.": "No designation matches the filter.",
   "Av metrarna är {0} m andra ledningar, mätta i den vidgade läsningen.": "Of the metres, {0} m are other runs, measured in the widened reading.",
   "mätt i den vidgade läsningen, utan referensmängd": "measured in the widened reading, with no reference takeoff",
+  "Det här bladet är ett schema (flödes- eller principschema). Ett schema ritas inte i skala: linjerna visar vad som hänger ihop, inte hur långt något är, så rörlängder mäts inte här. Rören mängdas på planritningarna. Beteckningarna och komponenterna på schemat är lästa och räknade.": "This sheet is a schematic (a flow or principle diagram). A schematic is not drawn to scale: its lines show what connects to what, not how long anything is, so no pipe lengths are measured here. The pipes are measured on the plans. The schematic's designations and components are read and counted.",
+  "Rör som schemat visar": "Pipes the schematic shows",
+  "Schema – inga rörlängder på det här bladet": "Schematic – no pipe lengths on this sheet",
+  "Ett schema ritas inte i skala. Rören mängdas på planritningarna, och schemats beteckningar och komponenter är lästa och räknade.": "A schematic is not drawn to scale. The pipes are measured on the plans, and the schematic's designations and components are read and counted.",
+  "gäller inte ett schema": "does not apply to a schematic",
+  "schema, mängdas på planritningarna": "schematic, measured on the plans",
+  "SCHEMA": "SCHEMATIC",
 };

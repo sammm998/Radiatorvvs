@@ -68,12 +68,22 @@ def coverage_validity(cov: dict[str, Any], anchors: list, reconciliation: dict |
         verdict = "INVALID"; reasons.append("GEOMETRY_CONSERVATION_BROKEN")
     if fr and fr.get("silent_pipes"):
         verdict = "INVALID"; reasons.append(f"SILENT_PIPES:{len(fr['silent_pipes'])}")
-    if scale_state in (None, "NONE"):
-        verdict = "INVALID"; reasons.append("NO_SCALE")
-    if names and got == 0 and n_pipes == 0:
-        verdict = "INVALID"; reasons.append("SHEET_NAMES_PIPES_BUT_NOTHING_WAS_MEASURED")
-    elif not names and not n_pipes:
-        verdict = "INVALID"; reasons.append("NO_READABLE_PIPE_LABELS")
+    if cov.get("scale_reason") == "schematic_not_to_scale":
+        # A flow or principle diagram is drawn without a scale on purpose: its lines say what connects to what,
+        # not how long anything is. Nothing is missing from it - its pipes are measured on the plans - so it is
+        # neither a sheet without a scale nor one where nothing was measured, and how many of its pipe names got
+        # metres is no question to ask of it. Its designations and components are read and counted.
+        measures["NAMES_WITH_METRES_SHARE"] = None
+        reasons.append("SCHEMATIC_NOT_TO_SCALE")
+        if verdict == "VALID":
+            verdict = "SCHEMATIC"
+    else:
+        if scale_state in (None, "NONE"):
+            verdict = "INVALID"; reasons.append("NO_SCALE")
+        if names and got == 0 and n_pipes == 0:
+            verdict = "INVALID"; reasons.append("SHEET_NAMES_PIPES_BUT_NOTHING_WAS_MEASURED")
+        elif not names and not n_pipes:
+            verdict = "INVALID"; reasons.append("NO_READABLE_PIPE_LABELS")
     if verdict == "VALID":
         if measures["NAMES_WITH_METRES_SHARE"] is not None and measures["NAMES_WITH_METRES_SHARE"] < DEGRADED_NAMES_WITH_METRES:
             verdict = "DEGRADED"; reasons.append("MOST_NAMES_WITHOUT_METRES")
@@ -114,6 +124,7 @@ def completion_checks(quality, quantities=(), source_assignment=None, review=Non
     for reason in checks:
         if reason not in reasons:
             reasons.append(reason)
-    if checks and result.get('verdict') != 'INVALID':
+    # a schema stays a schema: what the checks say is listed, but no metres hang on it
+    if checks and result.get('verdict') not in ('INVALID', 'SCHEMATIC'):
         result['verdict'] = 'DEGRADED'
     return result

@@ -2716,13 +2716,18 @@ def reading_coverage(pa: PageAnalysis) -> dict[str, Any]:
     # punkterna redovisas som de är, och skalans tillstånd följer med så att den som läser får veta varför.
     mpp = (pa.scale.meters_per_pt if pa.scale else None)
     metres = (lambda pt: round(pt * mpp, 2)) if mpp else (lambda pt: None)
+    # A flow or principle diagram names its pipes and draws them without a scale: none of its names is a pipe the
+    # reading missed - they are measured on the plans - and listing them as missed sent the reader looking for
+    # metres the sheet never had. They are said as what they are: the pipes the schema shows.
+    schematic = bool(pa.scale and pa.scale.reason == "schematic_not_to_scale")
+    missing = set() if schematic else named - got
     out = {
         "pipe_names": len(named), "pipe_names_with_metres": len(got),
-        "share": round(len(got) / len(named), 3) if named else None,
-        "without_metres": sorted(named - got)[:40],
+        "share": round(len(got) / len(named), 3) if named and not schematic else None,
+        "without_metres": sorted(missing)[:40],
         "names_from": "text_layer" if places else "reading",
         # where on the sheet each name without metres is written, so the reader can go and look
-        "missed": [{"name": n, "rects": places[n][:6]} for n in sorted(named - got)][:60] if places else [],
+        "missed": [{"name": n, "rects": places[n][:6]} for n in sorted(missing)][:60] if places else [],
         "drawn_m": metres(ink["drawn_pt"]), "confirmed_m": metres(ink["confirmed_pt"]),
         "ambiguous_m": metres(ink["ambiguous_pt"]), "unowned_m": metres(ink["unowned_pt"]),
         "drawn_pt": round(ink["drawn_pt"], 2), "confirmed_pt": round(ink["confirmed_pt"], 2),
@@ -2733,6 +2738,9 @@ def reading_coverage(pa: PageAnalysis) -> dict[str, Any]:
     }
     if fittings:
         out["components"] = [{"name": n, "count": len(r), "rects": r[:6]} for n, r in sorted(fittings.items())][:60]
+    if schematic:
+        out["schematic"] = True
+        out["names_on_schematic"] = [{"name": n, "rects": (places.get(n) or [])[:6]} for n in sorted(named)][:60]
     # Someone else's marks on the sheet, and how far they ran. A page that arrives already measured by hand
     # carries the answer drawn on top of the drawing; the reading takes that ink off before it reads, and says
     # here that it did, so nobody has to wonder whether a number came from the drawing or from the markup.

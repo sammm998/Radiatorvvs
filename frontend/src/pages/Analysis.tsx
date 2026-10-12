@@ -386,6 +386,9 @@ export default function AnalysisPage() {
    * och falskt om bladet: rören ÄR lästa, de går bara inte att räkna om till meter förrän någon säger vad
    * bladet är ritat i. Den skillnaden ska stå i klartext, inte gömmas bakom nollor. */
   const noScale = nm.scale_settled === false || nm.drawn_m == null;
+  // A flow or principle diagram is drawn without a scale on purpose. It is no sheet that failed: its pipes are
+  // measured on the plans, so it asks for no scale and has no pipe names "without metres".
+  const schematic = Boolean(nm.schematic) || nm.scale_reason === "schematic_not_to_scale";
   /* Someone else's marks on the sheet. A drawing that arrives with a takeoff already drawn on it in coloured
    * polylines carries somebody's answer on top of the drawing, and the reading takes that ink off before it
    * reads - otherwise it would measure an opinion of the drawing and hand it back as the drawing. That is worth
@@ -721,16 +724,31 @@ export default function AnalysisPage() {
                   : trf("Bladet bär {0} markeringar som inte gick att lyfta av: {1}.", markup.n, markup.why)}
               </p>
             )}
-            {noScale ? (
+            {schematic ? (
+              <>
+                <p className="badge">
+                  {tr("Det här bladet är ett schema (flödes- eller principschema). Ett schema ritas inte i skala: linjerna visar vad som hänger ihop, inte hur långt något är, så rörlängder mäts inte här. Rören mängdas på planritningarna. Beteckningarna och komponenterna på schemat är lästa och räknade.")}
+                </p>
+                {(nm.names_on_schematic?.length ?? 0) > 0 && (
+                  <details className="settings">
+                    <summary>{tr("Rör som schemat visar")} · {nm.names_on_schematic.length}</summary>
+                    <div className="body row" style={{ flexWrap: "wrap", gap: 8 }}>
+                      {nm.names_on_schematic.map((m: any) => (
+                        <button key={m.name} className="link small" onClick={() => {
+                          const r = m.rects?.[0];
+                          if (r) viewer.current?.zoomTo([r[0] - 40, r[1] - 40, r[2] + 40, r[3] + 40]);
+                        }}>{m.name}</button>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </>
+            ) : noScale ? (
               <>
                 <p className="badge bad">
-                  {nm.scale_reason === "schematic_not_to_scale"
-                    ? "Det här bladet är ett schema (flödes- eller principschema). Ett schema ritas inte i skala: linjerna "
-                      + "visar vad som hänger ihop, inte hur långt något är, så rörlängder kan inte mätas här. Mängda rören "
-                      + "på planritningarna. Beteckningarna och komponenterna på schemat är lästa och kan räknas."
-                    : "Bladets skala står inte på bladet och kunde inte mätas fram ur rören, så ingen sträcka kan ges i "
-                      + "meter. Systemet letar efter skaltext, skalstock, måttsättning och rör ritade med båda kanterna "
-                      + "(beteckningens dimension är rörets bredd). Skriv in skalan här, så läses bladet om under den."}
+                  {"Bladets skala står inte på bladet och kunde inte mätas fram ur rören, så ingen sträcka kan ges i "
+                    + "meter. Systemet letar efter skaltext, skalstock, måttsättning och rör ritade med båda kanterna "
+                    + "(beteckningens dimension är rörets bredd). Skriv in skalan här, så läses bladet om under den."}
                 </p>
                 <div className="row" style={{ gap: 8, alignItems: "center", margin: "10px 0 4px" }}>
                   <label className="small muted" htmlFor="skala">Skala 1:</label>
@@ -884,7 +902,7 @@ export default function AnalysisPage() {
                   skrafferade ytor mäts alltid men räknas in bara om du kryssar i rutan nedan.</p>
               </div>
             </details>
-            <QuantityTable rows={result.quantities} selected={selIdent} onSelect={onIdentityPick} floorHeight={floorH}
+            <QuantityTable rows={result.quantities} selected={selIdent} onSelect={onIdentityPick} floorHeight={floorH} schematic={schematic}
               pipes={result.pipes} meterPerPt={result.scale?.meters_per_pdf_point ?? null} onPipeClick={onPipeClick}
               selectedPipe={selPipe?.physical_pipe_id ?? null}
               onRiserSplit={job?.drawing_id ? async (r: any, slab: number) => {
