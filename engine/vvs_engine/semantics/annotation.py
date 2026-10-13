@@ -587,7 +587,24 @@ def _words(line: TextRow) -> list[list[Glyph]]:
             cur.append(g)
     if cur:
         words.append(cur)
-    return words
+    return _counts_joined(words)
+
+
+def _counts_joined(words: list[list[Glyph]]) -> list[list[Glyph]]:
+    """A count written apart from its code is the code's count.
+
+    One sheet writes the bundle at a manifold both ways: "4xKV1-X32-16" and "6x VV1-X32-16". Read as two words,
+    "6x" is no code and the row became a note, so the six pipes it names went unnamed - and a row that also
+    carried "2xVV1-X32-16" beside it was lost with it. The space is spacing, not a second word: the two read as
+    one word exactly where, written together, the count would be read as the code's count."""
+    out: list[list[Glyph]] = []
+    for w in words:
+        if out and re.fullmatch(r"\d{1,2}[xX]", "".join(g.char for g in out[-1])) \
+                and strip_count_prefix("".join(g.char for g in out[-1] + w))[0] > 1:
+            out[-1] = out[-1] + w
+        else:
+            out.append(w)
+    return out
 
 
 def _clip_stroke_at(page_idx: GridIndex, paths: list[RawPath], glyph: Glyph, line: TextRow, outer: str) -> bool:

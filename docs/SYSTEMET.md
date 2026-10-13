@@ -60,6 +60,14 @@ hänger ihop, inte hur långt något är. Ett schema är därför inget misslyck
 - komponenterna räknas, och i "Alla" ramas varje beteckning in
 - läsningen betalas tillbaka som förut, med skälet att bladet är ett schema
 
+**Ett antal skrivet isär är kodens antal.** Ett blad skriver buntarna vid en fördelare på två sätt: `4xKV1-X32-16`
+och `6x VV1-X32-16`. Lästa som två ord var "6x" ingen kod, så raden togs för en anteckning och bunten den namnger
+blev onämnd. En rad som skrev ännu en etikett bredvid, `8x KV1-X32-16 2xVV1-X32-16`, försvann hel. Mellanslaget är
+bara mellanrum:
+- antalet läses som där bladet skriver det ihop med koden
+- två etiketter på en rad är två etiketter (`_counts_joined` i `semantics/annotation.py`)
+- ett antal före något som inte är en kod, som `3x DUSCH-WC`, förblir en anteckning
+
 **Determinism.** Samma blad läst två gånger ger samma signatur, och ett blad läst mellan två andra påverkas inte
 av dem. Det prövas (`determinism.py`) och det gäller så länge ingen andra läsare kopplas in (se §3).
 
@@ -112,6 +120,10 @@ Tre ritkonventioner som läsningen läser som geometri, inte som antaganden (`pi
   utsträckning står still och fyller sin ruta: den sätts åt sidan innan någon graf byggs och redovisas som
   avvisad med skälet `DRAWN_FIGURE_NOT_A_RUN`, med strecken kvar att titta på. Mätt över korpusen ligger
   rörpennor på 0,8-2,9 och skrafferade radiatorer på 8,8-15,7.
+  Den andra läsaren tog strecken i en sådan figur för rörsträckor, och de lades till läsningens egen geometri.
+  På ett blad mättes så fyllningen i tjugotvå radiatorer, ungefär tjugo meter, som värmerören som slutar vid dem.
+  Den andra läsarens streck prövas nu med samma mått, på hela pennan, innan de läggs till (`merge_detection` i
+  `source_rules/native_bridge.py`). De som står still redovisas som `native_strokes_of_drawn_figures`.
 * **Ett rör ritat som två linjer** är ett rör. Ett grövre rör ritas som sina två kanter, ytterdiametern isär i
   bladets skala, och etiketten med ett streck på var kant namnger båda. Två sträckor med samma namn och samma
   penna sida vid sida längs större delen av den kortare, på det avstånd rörets diameter ger (1,6 × dy i skala,
@@ -159,6 +171,19 @@ Tre ritkonventioner som läsningen läser som geometri, inte som antaganden (`pi
   rörets namn. Utan regeln förde ett rör som gick in i en värmepump sitt namn runt hela värmepumpens hölje. Den
   andra läsarens del gäller inte en sida läst ur bild, där en spårad linje bryts upp i sådana korsningar som inte
   finns på ritningen: där tog den 0,7 procentenheter rätt längd från ett rasterblad.
+* **Ett aggregat ritat med rörpennan är inget rör.** Ett blad ritar sitt luftbehandlingsaggregat låda bredvid
+  låda, varje låda med dubbel kant, med samma penna som värmeröret som matar det. Röret som slutar vid
+  aggregatet hamnade i aggregatets knut. Knuten nådde då lika långt som röret, och bläcket räckte inte för att
+  den skulle stå still. Aggregatet mättes därför som röret, runt varje låda: fyrtio meter på ett rör om sextio.
+  - Ett objekts streck sluter sig. En sträcka gör det aldrig, för hur den än grenar sig är den ett träd. Strecken
+    som ligger på en sluten slinga i knutens egen ritning vägs därför en gång till, för sig och med samma mått
+    (`_closed_strokes` och `figure_pieces` i `pipes/representation.py`).
+  - Ett objekt är större än en symbol i linjen (`SYMBOL_SIZE`, 30 pt). En ring i slutet av ett rör eller en
+    ventilkropp sluter sig också, men röret fortsätter genom den. Utan gränsen togs en ring vid ett rör ritat som
+    kontur på ett sektionsblad, och röret bakom ringen förlorade sitt namn.
+  - Det som ligger helt inne i ett sådant objekt hör till objektet, till exempel fläkten med sitt kryss.
+  - En ringledning runt ett rum och ett rör ritat som sin kontur är slingor med lite bläck för sin utsträckning.
+    De står kvar som rör.
 
 ## 3. Vilka AI-modeller som används, och exakt hur
 
