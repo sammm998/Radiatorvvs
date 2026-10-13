@@ -323,21 +323,137 @@ def _knots(prims: list[Prim], gap: float = FIGURE_GAP) -> list[list[Prim]]:
     return [groups[k] for k in sorted(groups)]
 
 
+def _stands_still(knot: list[Prim], ratio: float) -> bool:
+    ink = sum(q.seg.length for q in knot)
+    xs = [v for q in knot for v in (q.seg.x0, q.seg.x1)]
+    ys = [v for q in knot for v in (q.seg.y0, q.seg.y1)]
+    diag = math.hypot(max(xs) - min(xs), max(ys) - min(ys))
+    return ink >= FIGURE_MIN_INK and 1e-6 < diag <= FIGURE_MAX_SPAN and ink / diag >= ratio
+
+
+def _closed_strokes(knot: list[Prim], tol: float = TOUCH_TOL) -> list[Prim]:
+    """The strokes of a knot that lie on a closed loop of its own drawing: a box, a box within a box, the rungs
+    of a filled outline.
+
+    Strokes meet where their ends touch or where an end lands on another stroke; a crossing is no meeting, as
+    everywhere in the reading. A run is a tree however it branches - none of its strokes lies on a loop - so the
+    strokes of a run that ends at a drawn object are not counted as the object's."""
+    n = len(knot)
+    idx = GridIndex(cell=12.0)
+    for i, q in enumerate(knot):
+        idx.insert(i, q.seg.bbox())
+    nodes: list[tuple[float, float]] = []
+    nidx = GridIndex(cell=6.0)
+
+    def node_at(x: float, y: float) -> int:
+        for j in nidx.query_point(x, y, tol):
+            if math.hypot(nodes[j][0] - x, nodes[j][1] - y) <= tol:
+                return j
+        nodes.append((x, y))
+        nidx.insert(len(nodes) - 1, (x, y, x, y))
+        return len(nodes) - 1
+
+    stops: list[set[tuple[float, int]]] = [set() for _ in range(n)]
+    for i, q in enumerate(knot):
+        stops[i].add((0.0, node_at(*q.a)))
+        stops[i].add((1.0, node_at(*q.b)))
+    for i, q in enumerate(knot):
+        for x, y in (q.a, q.b):
+            for j in idx.query_point(x, y, tol):
+                if j == i:
+                    continue
+                d, t = point_seg_distance(x, y, knot[j].seg)
+                if d <= tol and 0.0 < t < 1.0:
+                    stops[j].add((t, node_at(x, y)))
+    edges: list[tuple[int, int, int, float]] = []
+    for i, q in enumerate(knot):
+        st = sorted(stops[i])
+        for (t0, u), (t1, v) in zip(st, st[1:]):
+            if u != v:
+                edges.append((u, v, i, (t1 - t0) * q.seg.length))
+    adj: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    for e, (u, v, _, _) in enumerate(edges):
+        adj[u].append((v, e))
+        adj[v].append((u, e))
+    # the bridges of the knot's graph (Tarjan, iteratively): an edge on no loop
+    disc: dict[int, int] = {}
+    low: dict[int, int] = {}
+    bridges: set[int] = set()
+    timer = 0
+    for s in sorted(adj):
+        if s in disc:
+            continue
+        disc[s] = low[s] = timer
+        timer += 1
+        stack = [(s, -1, iter(adj[s]))]
+        while stack:
+            u, came_by, it = stack[-1]
+            for v, e in it:
+                if e == came_by:
+                    continue
+                if v in disc:
+                    low[u] = min(low[u], disc[v])
+                else:
+                    disc[v] = low[v] = timer
+                    timer += 1
+                    stack.append((v, e, iter(adj[v])))
+                    break
+            else:
+                stack.pop()
+                if stack:
+                    p = stack[-1][0]
+                    low[p] = min(low[p], low[u])
+                    if low[u] > disc[p]:
+                        bridges.add(came_by)
+    on_loop = [0.0] * n
+    for e, (_, _, i, length) in enumerate(edges):
+        if e not in bridges:
+            on_loop[i] += length
+    return [q for i, q in enumerate(knot) if on_loop[i] >= 0.5 * q.seg.length > 0]
+
+
 def figure_pieces(prims: list[Prim]) -> tuple[list[Prim], list[Prim]]:
     """(runs, figures): the strokes that go somewhere, and the knots that stand still and fill a box."""
     runs: list[Prim] = []
     figures: list[Prim] = []
     ratio = _R("pipes.representation.FIGURE_INK", FIGURE_INK)
+    loose: list[list[Prim]] = []
+    objects: list[tuple[float, float, float, float]] = []
     for knot in _knots(prims):
-        ink = sum(q.seg.length for q in knot)
-        xs = [v for q in knot for v in (q.seg.x0, q.seg.x1)]
-        ys = [v for q in knot for v in (q.seg.y0, q.seg.y1)]
-        diag = math.hypot(max(xs) - min(xs), max(ys) - min(ys))
-        if ink >= FIGURE_MIN_INK and 1e-6 < diag <= FIGURE_MAX_SPAN and ink / diag >= ratio:
+        if _stands_still(knot, ratio):
             figures.extend(knot)
+            continue
+        # A run that ends at a drawn object joins the object's knot: an air handling unit drawn box beside box on
+        # the pipe pen, with the pipe that feeds it. The knot then reaches as far as the run does, and spends too
+        # little ink over that reach to stand still - so the unit was measured as the pipe, round every box. The
+        # object's strokes close on themselves and a run's never do, so the strokes on loops are weighed again on
+        # their own, by the same measure.
+        closed = _closed_strokes(knot) if len(knot) >= 4 else []
+        held: set[int] = set()
+        for part in _knots(closed):
+            if _stands_still(part, ratio):
+                held.update(id(q) for q in part)
+                objects.append(_box_of(part))
+        figures.extend(q for q in knot if id(q) in held)
+        rest = [q for q in knot if id(q) not in held]
+        if rest:
+            loose.append(rest)
+    # ...and what such an object holds is the object's: the fan drawn inside the unit stands apart from its edges,
+    # too small to stand still on its own, and was left as a run nobody named.
+    for rest in loose:
+        b = _box_of(rest)
+        if any(o[0] - TOUCH_TOL <= b[0] and o[1] - TOUCH_TOL <= b[1] and b[2] <= o[2] + TOUCH_TOL
+               and b[3] <= o[3] + TOUCH_TOL for o in objects):
+            figures.extend(rest)
         else:
-            runs.extend(knot)
+            runs.extend(rest)
     return runs, figures
+
+
+def _box_of(prims: list[Prim]) -> tuple[float, float, float, float]:
+    xs = [v for q in prims for v in (q.seg.x0, q.seg.x1)]
+    ys = [v for q in prims for v in (q.seg.y0, q.seg.y1)]
+    return min(xs), min(ys), max(xs), max(ys)
 
 
 def collect_prims(page: RawPage, families: set[str], exclude_pids: set[str] | None = None,

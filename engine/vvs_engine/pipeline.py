@@ -1712,7 +1712,8 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
         from .source_rules.unattested_codes import set_aside as set_aside_misread_codes
         misread_codes = set_aside_misread_codes(native.get('labels') or [], designations)
         native_merge = merge_detection(page, native, graphs, pipe_families, anchors,
-                                       native_identities, native_elevations, not_pipe=written_leaders)
+                                       native_identities, native_elevations, not_pipe=written_leaders,
+                                       lettering=glyph_pids | annotation_paths)
         native_merge['label_sizes_from_drawing_lettering'] = label_sizes
         native_merge['misread_codes_set_aside'] = misread_codes
         from .source_rules.lost_suffix import restore as restore_lost_suffixes

@@ -5,7 +5,8 @@ No model-generated coordinates, blanket pen-family admission or length doubling.
 """
 from collections import defaultdict
 from ..geometry.core import point_seg_distance, stable_id
-from ..pipes.representation import Prim, build_graph, describe_family, graph_tolerances, page_symbols, stroke_family
+from ..pipes.representation import (Prim, build_graph, collect_prims, describe_family, graph_tolerances, page_symbols,
+                                    stroke_family)
 from ..pipes.ownership import identity_from_text
 from ..semantics.attachment import PipeCodeAnchor, Contact
 
@@ -14,9 +15,13 @@ def _key(layer, width, rect):
     return layer, round(width, 2), tuple(round(v, 1) for v in rect)
 
 
-def merge_detection(page, native, graphs, families, anchors, identities, elevations, not_pipe=frozenset()):
+def merge_detection(page, native, graphs, families, anchors, identities, elevations, not_pipe=frozenset(),
+                    lettering=frozenset()):
     """not_pipe: the reading's own leaders. The native reader may take a leader drawn with the pipe pen for a
-    stretch of pipe; it is not added, or the leader is joined to the pipe it points at and measured as that pipe."""
+    stretch of pipe; it is not added, or the leader is joined to the pipe it points at and measured as that pipe.
+
+    lettering: the paths the reading took for writing - glyphs drawn as strokes, the bars under its labels, their
+    boxes. They are left out where a pen is weighed for figures, as the reading leaves them out of its own."""
     from .swedish import designation_text
     from shapely.geometry import MultiLineString
     from .pipestudio.geom import flatten
@@ -70,6 +75,21 @@ def merge_detection(page, native, graphs, families, anchors, identities, elevati
     present: dict[str, set] = {}
     next_id: dict[str, int] = {}
     leaders = 0
+    # Ink that stands still is no run, whichever reader found it. The reading sets a pen's drawn figures aside
+    # before it builds a graph on the pen (collect_prims): a radiator drawn as a narrow box filled with strokes of
+    # the pipe pen fills its box and goes nowhere. The native reader takes such strokes for stretches of pipe, and
+    # adding them here handed back what the reading had set aside - on one sheet the fill of twenty-two radiators,
+    # some twenty metres, was measured as the heating pipes that end at them. So its strokes are put to the same
+    # test, on the whole pen, before they join.
+    standing: dict[str, set] = {}
+    figure_strokes = 0
+
+    def stands_still(fk, pid, i):
+        if fk not in standing:
+            figures = {}
+            collect_prims(page, {fk}, exclude_pids=set(not_pipe) | set(lettering), figures_out=figures)
+            standing[fk] = {(q.pid, q.seg_index) for q in figures.get(fk, ())}
+        return (pid, i) in standing[fk]
     for native_id in sorted(used):
         path = mapped.get(native_id)
         if path is None: continue
@@ -85,6 +105,8 @@ def merge_detection(page, native, graphs, families, anchors, identities, elevati
         seen = present[fk]
         for i, segment in enumerate(path.segs):
             if (path.pid, i) in seen or segment.length <= 0: continue
+            if stands_still(fk, path.pid, i):
+                figure_strokes += 1; continue
             k = next_id[fk]; next_id[fk] = k + 1
             target[k] = Prim(k, path.pid, i, segment, fk, path.layer, path.width,
                              src_len=segment.length)
@@ -146,5 +168,6 @@ def merge_detection(page, native, graphs, families, anchors, identities, elevati
     return {'matched_paths': len(mapped), 'native_pipe_paths': len(used),
             'added_primitives': added, 'added_label_contacts': contact_count,
             'native_paths_that_are_leaders': leaders,
+            'native_strokes_of_drawn_figures': figure_strokes,
             'unmatched_native_paths': len(set(used) - set(mapped)),
             'native_nodes': len(native_nodes), 'native_stretches': len(native_stretches)}
