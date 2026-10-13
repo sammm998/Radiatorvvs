@@ -6,6 +6,8 @@ extent in ink stands still. But the pipe that ends at the unit joined the unit's
 pipe, and the unit was measured as the pipe, round every box - forty metres on a sixty-metre pipe. The unit's strokes
 close on themselves and a run's never do, so the strokes on loops are weighed again on their own.
 """
+import math
+
 import pymupdf
 
 from vvs_engine.geometry.core import Seg
@@ -50,6 +52,23 @@ def test_the_unit_stands_still_and_the_pipe_that_feeds_it_runs():
     runs, figures = figure_pieces(unit + pipe)
     assert {q.pid for q in figures} == {q.pid for q in unit}
     assert {q.pid for q in runs} == {q.pid for q in pipe}
+
+
+def _ring(cx, cy, radii=(4.2, 3.4, 2.6, 1.8, 1.0), n=40):
+    segs = []
+    for r in radii:
+        pts = [(cx + r * math.cos(2 * math.pi * k / n), cy + r * math.sin(2 * math.pi * k / n)) for k in range(n + 1)]
+        segs += [Seg(*pts[k], *pts[k + 1]) for k in range(n)]
+    return segs
+
+
+def test_a_ring_the_run_passes_through_is_no_object():
+    """A ring drawn in the line - rings within rings, ink many times its size - closes on itself as an object's
+    strokes do, but it is a symbol of the run, smaller than any apparatus, and the run goes on through it."""
+    ring = _ring(200.0, 100.0)
+    pipe = [Seg(100, 100, 195.8, 100), Seg(204.2, 100, 300, 100), Seg(300, 100, 300, 250)]
+    runs, figures = figure_pieces(_prims(ring + pipe))
+    assert figures == [], len(figures)
 
 
 def test_a_loop_of_pipe_and_a_pipe_drawn_as_its_outline_are_runs():

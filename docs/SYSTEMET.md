@@ -178,6 +178,9 @@ Tre ritkonventioner som läsningen läser som geometri, inte som antaganden (`pi
   - Ett objekts streck sluter sig. En sträcka gör det aldrig, för hur den än grenar sig är den ett träd. Strecken
     som ligger på en sluten slinga i knutens egen ritning vägs därför en gång till, för sig och med samma mått
     (`_closed_strokes` och `figure_pieces` i `pipes/representation.py`).
+  - Ett objekt är större än en symbol i linjen (`SYMBOL_SIZE`, 30 pt). En ring i slutet av ett rör eller en
+    ventilkropp sluter sig också, men röret fortsätter genom den. Utan gränsen togs en ring vid ett rör ritat som
+    kontur på ett sektionsblad, och röret bakom ringen förlorade sitt namn.
   - Det som ligger helt inne i ett sådant objekt hör till objektet, till exempel fläkten med sitt kryss.
   - En ringledning runt ett rum och ett rör ritat som sin kontur är slingor med lite bläck för sin utsträckning.
     De står kvar som rör.

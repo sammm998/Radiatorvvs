@@ -428,12 +428,16 @@ def figure_pieces(prims: list[Prim]) -> tuple[list[Prim], list[Prim]]:
         # little ink over that reach to stand still - so the unit was measured as the pipe, round every box. The
         # object's strokes close on themselves and a run's never do, so the strokes on loops are weighed again on
         # their own, by the same measure.
+        # An object is larger than a symbol drawn in a line, though: a ring at a pipe's end or a valve's body closes
+        # on itself as well, and the run goes on through it - on a section sheet a ring at the end of a pipe drawn
+        # as its outline was set aside, and the pipe behind it lost its name.
         closed = _closed_strokes(knot) if len(knot) >= 4 else []
         held: set[int] = set()
         for part in _knots(closed):
-            if _stands_still(part, ratio):
+            b = _box_of(part)
+            if math.hypot(b[2] - b[0], b[3] - b[1]) > SYMBOL_SIZE and _stands_still(part, ratio):
                 held.update(id(q) for q in part)
-                objects.append(_box_of(part))
+                objects.append(b)
         figures.extend(q for q in knot if id(q) in held)
         rest = [q for q in knot if id(q) not in held]
         if rest:
