@@ -753,7 +753,7 @@ export default function AnalysisPage() {
                 <div className="row" style={{ gap: 8, alignItems: "center", margin: "10px 0 4px" }}>
                   <label className="small muted" htmlFor="skala">Skala 1:</label>
                   <input id="skala" className="small" style={{ width: 90 }} inputMode="numeric" value={ratio}
-                    placeholder="50" onChange={(e) => setRatio(e.target.value.replace(/[^0-9]/g, ""))} />
+                    onChange={(e) => setRatio(e.target.value.replace(/[^0-9]/g, ""))} />
                   <button className="small" disabled={!ratio || rescaling}
                     onClick={async () => {
                       setRescaling(true); setActionErr("");

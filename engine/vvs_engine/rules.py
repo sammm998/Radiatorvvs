@@ -162,6 +162,10 @@ RULES: tuple[Rule, ...] = (
          "rita, och tas inte som rör. Den måste ha ritat så här många streck innan \"varenda ett\" säger "
          "något om den.",
          "antal", 8, 2, 50, "layers", True),
+    Rule("pipeline.WRITING_PEN_TICKED_LABELS", G_LEADER, "...utom där etiketterna märkt pennan",
+         "En penna som så här många av bladets etiketter satt sitt märke på ritar rör, också där varje streck "
+         "råkar sluta vid något läsningen tog för text.",
+         "antal", 2, 1, 20, "layers", True),
     Rule("pipeline.CLOSE_ON_OWNED_TOL", G_LEADER, "Etiketten står på sin egen sträcka",
          "Hur nära en redan namngiven sträcka en etikettände får sluta för att räknas som att den bekräftar "
          "samma sträcka i stället för att vara olöst.",
