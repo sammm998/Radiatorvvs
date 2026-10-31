@@ -28,6 +28,22 @@ def test_no_turn_reads_clearly_better_so_none_is_made(monkeypatch):
     assert orient.turn_for("x.pdf", 0, _prep(5, 30)) == 0      # a sparse sheet stays as it is
 
 
+def _listing(prep, rows):
+    prep.legend = SimpleNamespace(own=True, entries=list(range(rows)))
+    return prep
+
+
+def test_a_sheet_whose_own_list_reads_as_it_lies_is_not_turned_for_more_names(monkeypatch):
+    """Lettering drawn as strokes reads its words as codes too, so few of the names it reads carry a size however
+    the sheet lies - and a sheet that names its pipes both ways reads more of them turned. The turn that loses the
+    sheet's own designation list is the wrong one."""
+    readings = {90: _listing(_prep(0, 59), 0), 270: _listing(_prep(58, 124), 0), 180: _listing(_prep(0, 25), 0)}
+    monkeypatch.setattr(orient, "_reading_turned", lambda path, pno, turn: readings[turn])
+    assert orient.turn_for("x.pdf", 0, _listing(_prep(35, 54), 40)) == 0
+    # the same sheet with no list of its own is turned as before
+    assert orient.turn_for("x.pdf", 0, _prep(35, 54)) == 270
+
+
 def test_the_turn_is_written_into_rotate_and_the_drawing_is_untouched(tmp_path):
     src, dst = tmp_path / "a.pdf", tmp_path / "b.pdf"
     doc = pymupdf.open()

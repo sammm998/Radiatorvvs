@@ -21,6 +21,7 @@ from __future__ import annotations
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any
 
 from ..text.model import TextRow
@@ -84,6 +85,39 @@ def code_matches(label: str, code: str) -> bool:
     return re.fullmatch(pat, L) is not None
 
 
+# Where a stroke-drawn letter and digit share a shape, the reader may give either: O and 0, S and 5, I and 1.
+_TWIN_FOLD = str.maketrans({"O": "0", "I": "1", "S": "5", "B": "8", "Z": "2", "G": "6"})
+_PLACEHOLDER_CODE = re.compile(r"^([A-ZÅÄÖ]+)X{2,}(.*)$")
+
+
+@lru_cache(maxsize=4096)
+def _placeholder_pattern(code: str):
+    """A list's code with a placeholder for the system number, as a pattern for the labels it stands for.
+
+    A list writes a system family once, the number the drawing gives each system written as XX - `KVXX-3
+    KALLVATTENLEDNING KOPPAR`, `VSXX-22 VÄRMEBÄRARE SEKUNDÄR STÅLRÖR` - and says so in a line of its own: "XX AVSER
+    SYSTEMBETECKNING". So `KV02-3-15` is that code: KV, a system number, then the -3 that follows the placeholder.
+    Read letter for letter, no label ever opened with KVXX-3, every code of such a list was taken for a material,
+    and a whole set of sheets named no pipe at all. The code and the label are compared as the strokes allow: a
+    sheet whose lettering is drawn reads its 0 as O, and its S as 5, as often as not."""
+    m = _PLACEHOLDER_CODE.match(code.upper())
+    if not m:
+        return None
+    stem, rest = m.group(1).translate(_TWIN_FOLD), m.group(2).translate(_TWIN_FOLD)
+    return re.compile(r"^%s\d{1,3}%s(?=$|[-/+.,:(\[ ])" % (re.escape(stem), re.escape(rest)))
+
+
+def opens_with(label: str, code: str) -> bool:
+    """Whether a label opens with this code of the list: letter for letter, or through the list's placeholder."""
+    L, C = (label or "").upper().strip(), (code or "").upper()
+    if not L or not C:
+        return False
+    if L == C or L.startswith(C):
+        return True
+    pat = _placeholder_pattern(C)
+    return pat is not None and pat.match(L.translate(_TWIN_FOLD)) is not None
+
+
 @dataclass
 class LegendEntry:
     code: str
@@ -130,7 +164,8 @@ class DrawingLegend:
             c = e.code.upper()
             if not c:
                 continue
-            if h == c or (h.startswith(c) and len(h) > len(c)):
+            if h == c or (h.startswith(c) and len(h) > len(c)) \
+                    or (_placeholder_pattern(c) is not None and opens_with(h, c)):
                 if best is None or len(c) > len(best):
                     best = c
         return best
@@ -172,9 +207,9 @@ class DrawingLegend:
             return True
         if self.names_a_component(text):
             return False
-        if any(head == c or head.startswith(c) for c in systems):
+        if any(opens_with(text, c) or opens_with(head, c) for c in systems):
             return True
-        return not self.own and not any(head == c or head.startswith(c) for c in self.by_code)
+        return not self.own and not any(opens_with(text, c) or opens_with(head, c) for c in self.by_code)
 
     def components(self) -> set[str]:
         return {e.code.upper() for e in self.entries if e.role == "component"}
@@ -408,7 +443,7 @@ def read_legend(lines: list[TextRow], designations=()) -> DrawingLegend:
         codes = {e.code.upper() for e in entries}
         if len(codes) < _R("semantics.legend.MIN_CODES", MIN_CODES):
             continue                    # a column that repeats one word is a table, not a vocabulary
-        used = sum(1 for c in codes if any(h == c or h.startswith(c) for h in heads))
+        used = sum(1 for c in codes if any(opens_with(h, c) for h in heads))
         dxs = [found[rid][2] for rid in (l.rid for l in rows)
                if rid in found and edge - 0.1 <= by_rid[rid].bbox[0] <= edge + _R("semantics.legend.COL_TOL", COL_TOL)]
         dedge = densest_edge(dxs)
@@ -593,9 +628,13 @@ def assign_roles(legend: DrawingLegend, designations, prior: dict[str, str] | No
     standalone: set[str] = set()
     codes = sorted({e.code.upper() for e in legend.entries}, key=len, reverse=True)
 
-    def owner(head: str) -> str | None:
+    def owner(head: str, text: str = "") -> str | None:
         for c in codes:
             if head == c or (head.startswith(c) and len(head) > len(c)):
+                return c
+            # a code with a placeholder for the system number carries what follows the number too (KVXX-3), and
+            # only the whole label has that
+            if _placeholder_pattern(c) is not None and (opens_with(text, c) or opens_with(head, c)):
                 return c
         return None
 
@@ -612,7 +651,7 @@ def assign_roles(legend: DrawingLegend, designations, prior: dict[str, str] | No
     for d in designations:
         if getattr(d, "dn", None) is None or not outside(d):
             continue
-        c = owner((getattr(d, "system_token", "") or "").upper())
+        c = owner((getattr(d, "system_token", "") or "").upper(), (getattr(d, "text", "") or "").upper())
         if c:
             by_pattern[_role_pattern(d)].add(c)
     shared = {pat for pat, cs in by_pattern.items() if len(cs) >= 2}
@@ -626,7 +665,7 @@ def assign_roles(legend: DrawingLegend, designations, prior: dict[str, str] | No
             # where the sheet writes no shape more than one code shares, there is no grammar to appeal to and
             # a size on the label is all the evidence there is
             if not shared or _role_pattern(d) in shared:
-                c = owner(head)
+                c = owner(head, text)
                 if c:
                     opens.add(c)
         else:
@@ -646,7 +685,7 @@ def assign_roles(legend: DrawingLegend, designations, prior: dict[str, str] | No
         if getattr(d, "dn", None) is None or not outside(d):
             continue
         toks = [t.upper() for t in (getattr(d, "tokens", None) or split_tokens(getattr(d, "text", "") or ""))]
-        c = owner((getattr(d, "system_token", "") or "").upper())
+        c = owner((getattr(d, "system_token", "") or "").upper(), (getattr(d, "text", "") or "").upper())
         if c and any(t in materials for t in toks[1:]):
             writes_a_pipe.add(c)
 
@@ -696,7 +735,7 @@ def assign_roles(legend: DrawingLegend, designations, prior: dict[str, str] | No
     for d in designations:
         head = (getattr(d, 'system_token', '') or '').upper()
         match = re.fullmatch(r'([A-ZÅÄÖ]+)\d+', head)
-        if (owner(head) is not None or not match or len(classes[match[1]]) < 2
+        if (owner(head, (getattr(d, 'text', '') or '').upper()) is not None or not match or len(classes[match[1]]) < 2
                 or getattr(d, 'dn', None) is None or not outside(d)
                 or _role_pattern(d) not in shared):
             continue

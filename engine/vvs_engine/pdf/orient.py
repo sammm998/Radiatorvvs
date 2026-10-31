@@ -24,6 +24,15 @@ TURN_MIN_DN = 10         # ...and enough of them to be a sheet's worth, not a fe
 TURNS = (90, 270, 180)     # a quarter turn either way, and upside down
 
 
+LIST_MIN = 8             # rows of the sheet's own designation list: a list read this long reads as it lies
+
+
+def _listed(prep) -> int:
+    """How many rows of its own designation list a reading found."""
+    lg = getattr(prep, "legend", None)
+    return len(lg.entries) if lg is not None and getattr(lg, "own", False) else 0
+
+
 def _named(prep) -> tuple[int, int]:
     ds = prep.designations
     return sum(1 for d in ds if d.dn is not None), len(ds)
@@ -102,10 +111,18 @@ def turn_for(pdf_path: str, pno: int, prep) -> int:
     if reads_upright(prep):
         return 0
     here, _ = _named(prep)
+    listed = _listed(prep)
     best, best_dn = 0, here
     for turn in TURNS:
         other = _reading_turned(pdf_path, pno, turn)
         if other is None:
+            continue
+        # A sheet whose own designation list reads as it lies is not lying on its side. A sheet drawn with
+        # stroke lettering reads its words as codes too - a 0 for every O - so its share of names with a size
+        # is low however it lies, and one that names its pipes in both directions read more of them a quarter
+        # turn round: it was turned, its list and its stamp no longer read, and it came back with no scale and
+        # no metres. The turn that loses the list is the wrong one.
+        if listed >= LIST_MIN and _listed(other) < listed:
             continue
         dn, _ = _named(other)
         if dn > best_dn:

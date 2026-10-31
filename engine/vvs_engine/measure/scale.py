@@ -36,6 +36,36 @@ SCALE_RE = re.compile(r"1\s*[:;]\s*([0-9%s]{1,4})(?![0-9%s])"
 def digits_from_glyphs(s: str) -> str:
     """Bokstäverna tillbaka till de siffror de ritades som, där bara ett tal kan stå."""
     return "".join(GLYPH_DIGITS.get(ch, ch) for ch in s)
+
+
+RATIO_RUN = re.compile(r"1\s*[:;]\s*([0-9%s]+)" % "".join(GLYPH_DIGITS))
+# a format named before its ratio: "A3=1:100" says the same as "1:100 (A3)"
+FORMAT_FIRST_RE = re.compile(r"\bA([0-4])\s*=\s*1\s*[:;]")
+
+
+def ratios_in(text: str) -> list[int]:
+    """The ratios a row states, read as SCALE_RE reads them - and where the bracket after a ratio was read as a
+    letter, cut there.
+
+    A stamp drawn as strokes writes `SKALA 1:50 (A1) 1:100 (A3)`, and the reader takes a bracket for the I it
+    resembles: "1:5O I A1", "1:1OO I 3I". In the one place a number must stand that I is a 1, so the first read as
+    1:501 and the second as no ratio at all - and the sheet's own scale was outvoted by its own stamp. Where the run
+    after "1:" is no scale anyone draws in, but stops being one only at a letter read as a 1, the ratio is what
+    comes before that letter."""
+    out: list[int] = []
+    for m in RATIO_RUN.finditer(text):
+        run = m.group(1)
+        whole = digits_from_glyphs(run)
+        if len(run) <= 4 and int(whole) in STANDARD_RATIOS:
+            out.append(int(whole))
+            continue
+        cut = next((int(digits_from_glyphs(run[:k])) for k in range(len(run) - 1, 0, -1)
+                    if run[k] in "IlL" and int(digits_from_glyphs(run[:k])) in STANDARD_RATIOS), None)
+        if cut is not None:
+            out.append(cut)
+        elif len(run) <= 4:
+            out.append(int(whole))
+    return out
 FORMAT_RE = re.compile(r"\bA([0-4])\b")
 
 
@@ -130,18 +160,16 @@ def discover_scale(page: RawPage, lines: list[TextRow]) -> ScaleResult:
     # 1. scale text
     for ln in lines:
         t = ln.text.replace(" ", "")
-        for m in SCALE_RE.finditer(t):
-            digits = digits_from_glyphs(m.group(1))
-            if not digits.isdigit():
-                continue
-            n = int(digits)
+        for n in ratios_in(t):
             if 5 <= n <= 5000:
                 # ignore obvious non-scale ratios inside longer codes (e.g. 1:1 in notes) by requiring a 'scale-like' context:
                 # the row is short or contains a scale keyword or a page-format qualifier
                 ctx = ln.text.upper()
-                if len(t) <= 14 or "SKALA" in ctx or "SCALE" in ctx or re.search(r"\(A[0-4]\)", ctx):
+                first = [f"(A{f})" for f in FORMAT_FIRST_RE.findall(ctx.replace(" ", ""))]
+                if len(t) <= 14 or "SKALA" in ctx or "SCALE" in ctx or re.search(r"\(A[0-4]\)", ctx) or first:
                     ev.append(ScaleEvidence(kind="scale_text", text=ln.text, bbox=[round(v, 1) for v in ln.bbox],
-                                            value=n * MM_PER_PT / 1000.0, detail={"ratio": n, "qualifier": re.findall(r"\(A[0-4]\)", ctx)}))
+                                            value=n * MM_PER_PT / 1000.0,
+                                            detail={"ratio": n, "qualifier": re.findall(r"\(A[0-4]\)", ctx) + first}))
     # 2. scale bar: >=3 numeric labels (integers) equally spaced along one axis with a long line/bar nearby
     bar = _find_scale_bar(page, lines)
     if bar is not None:

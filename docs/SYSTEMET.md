@@ -185,6 +185,32 @@ Tre ritkonventioner som läsningen läser som geometri, inte som antaganden (`pi
   - En ringledning runt ett rum och ett rör ritat som sin kontur är slingor med lite bläck för sin utsträckning.
     De står kvar som rör.
 
+### 2d. Blad där all text är ritade streck
+
+En del blad är plottade ur CAD utan ett enda tecken som text: beteckningar, förteckning, stämpel och skalstockens
+siffror är streck. Läsningen tar texten ur strecken, och strecktexten förväxlar tecken som liknar varandra (O och 0,
+S och 5, I och 1, B och 8). Fyra regler gör att ett sådant blad mängdas i stället för att stå på 0 %:
+
+* **Förteckningens platshållare** (`semantics/legend.py`, `opens_with`). En förteckning kan skriva systemnumret som
+  `XX` (`KVXX-3`, `VSXX-22`) och förklara det på en egen rad ("XX avser systembeteckning"). En etikett `KV02-3-15`
+  öppnar då med koden: stammen, ett till tre tecken i numrets ställe och resten av koden, jämförda med tvillingarna
+  utjämnade. Det som följer numret måste stämma (`VS02-22-12` öppnar inte med `VSXX-2`). Utan regeln användes ingen
+  av förteckningens koder och varje etikett avvisades som inget rörnamn.
+* **Stämpelns skala** (`measure/scale.py`, `ratios_in`). `SKALA 1:50 (A1) 1:100 (A3)` lästes som "1:5O I A1": parentesen
+  blir ett I, och ett I där en siffra ska stå är en etta - 1:501. Där talet efter "1:" inte är någon skala man ritar i
+  men blir en före en bokstav som läses som etta, är skalan det som står före. En stämpel som skriver formatet först,
+  `A3=1:100`, säger detsamma som `1:100 (A3)`.
+* **En penna som etiketterna märkt är ingen skrivpenna** (`pipeline.WRITING_PEN_TICKED_LABELS`, 2). En penna vars
+  varje streck börjar eller slutar vid en textruta tas för skrift. Men värmerör ritade fram till små ringar vid
+  radiatorerna slutade "vid text" när ringarna lästes som O. En hänvisningslinje sätter sitt märke på röret den pekar
+  på, så en penna som två etiketter märkt ritar rör.
+* **Ett blad som läser sin egen förteckning står rätt** (`pdf/orient.py`, `LIST_MIN`, 8). Vridningen väljer det håll
+  där flest rörnamn läses. Läser bladet minst åtta av sina egna förteckningsrader som det ligger, och läser det
+  vridna färre, vrids det inte: fler namn på tvären är tvillingläsningar, inte rör.
+
+Ett inskannat blad med samma stämpel får ingen skala ur bilden: där skrivs skalan in för hand, och mängden granskas
+alltid.
+
 ## 3. Vilka AI-modeller som används, och exakt hur
 
 Det här är det viktigaste avsnittet att läsa rätt, så det är rakt.

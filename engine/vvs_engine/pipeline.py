@@ -27,7 +27,7 @@ from .semantics.annotation import (AnnotationBlock, Designation, build_blocks, e
 from .text.model import project, row_axes
 from .semantics.attachment import (GeometryIndex, PathsByPlace, PipeCodeAnchor, family_of, layer_system_tokens,
                                    leader_contacts, resolve_block, system_layer_match)
-from .semantics.legend import DrawingLegend, adopt, assign_roles, read_legend, roles_of
+from .semantics.legend import DrawingLegend, adopt, assign_roles, opens_with, read_legend, roles_of
 from .semantics.declarations import Declarations, read_declarations
 
 # Under measurement: whether a dimension on the row below means the label names a stack and nothing else. Off
@@ -76,6 +76,7 @@ LEADER_MIN_SHARE = 0.25
 LEADER_INK_SHARE = 0.5     # a nameless pen is the leader pen when its leaders are most of what it draws
 PEER_SHARE = 0.15          # a drawn family carrying this much of the best family's label ends is a peer of it
 PEER_LABELS_MIN = 2        # and two of the sheet's own labels pointing at it is the least that can say so
+WRITING_PEN_TICKED_LABELS = 2   # labels that left their tick on a pen: it draws what they name, whatever else it touches
 # and with no layer name to vouch for it, this share of the sheet's own pipe labels must have reached it
 LABELS_MUST_REACH = 0.15
 # How much of a pen's own ink has to be the sheet's writing before withholding it is safe. Measured over the
@@ -1690,7 +1691,21 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
         progress("BUILDING_TOPOLOGY")
     # En penna vars varenda streck börjar eller slutar vid en beteckningsruta skriver, den ritar inte - och en
     # skrivpenna är inte rörgeometri, hur mycket dess lagernamn än liknar rörlagrens.
+    #
+    # Utom där bladets egna etiketter har märkt pennan. En hänvisningslinje sätter sitt märke på röret den
+    # pekar på, aldrig på en annan hänvisningslinje, så en penna som två etiketter märkt ritar rör. Ett blad
+    # ritar sina värmerör fram till små ringar vid radiatorerna, och textläsningen tog ringarna för bokstaven O:
+    # varje streck i pennan slutade då "vid en etikett", och pennan med fyra märkta värmeetiketter domdes som
+    # skrivpenna. Ingen av dem fick en meter.
+    ticked: dict[str, set[str]] = defaultdict(set)
+    for a in anchors:
+        if a.state == "VERIFIED_PIPE_ATTACHMENT":
+            for c in a.contacts:
+                if c.kind in ("end_tick", "crossing_tick"):
+                    ticked[c.family].add(a.designation_id)
     for fk in sorted(_writing_pens(page, set(pipe_families), blocks)):
+        if len(ticked.get(fk, ())) >= _R("pipeline.WRITING_PEN_TICKED_LABELS", WRITING_PEN_TICKED_LABELS):
+            continue
         pipe_families.pop(fk, None)
         graphs.pop(fk, None)
         contact_stats.setdefault("writing_pens_not_taken_as_pipe", []).append(fk)
@@ -2483,7 +2498,7 @@ def _unknown_to_the_legend(legend, designations) -> set[str]:
         head = (getattr(d, "system_token", "") or "").upper()
         if legend.role_of_head(text) is not None or (head and legend.role_of_head(head) is not None):
             return True
-        if any((text and text.startswith(c)) or (head and head.startswith(c)) for c in codes):
+        if any(opens_with(text, c) or opens_with(head, c) for c in codes):
             return True
         return _a_whole_pipe_name_of_a_standard_system(text)
 
