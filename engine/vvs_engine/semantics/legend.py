@@ -118,6 +118,32 @@ def opens_with(label: str, code: str) -> bool:
     return pat is not None and pat.match(L.translate(_TWIN_FOLD)) is not None
 
 
+def number_as_listed(label: str, codes) -> str:
+    """The label with the system number a list's placeholder stands for written in digits.
+
+    Read from strokes the number reads as letters as often as not: `KVO1-53-/VVOZ-3-16`. Compared through the twin
+    folding it is found as it should be, but the name it was given carried the letters, so one system came out
+    as two rows under names the drawing never wrote. Where a list code says that a number stands in this place
+    (KVXX-53), there is nothing but a number there to read: the letters in it are the digits they resemble. Only
+    that place is rewritten, and only in a part that opens with such a code; everything else stands as read."""
+    parts = (label or "").split("/")
+    out = []
+    for part in parts:
+        P = part.upper()
+        done = part
+        for c in codes:
+            m = _PLACEHOLDER_CODE.match((c or "").upper())
+            if not m or not opens_with(P, c):
+                continue
+            stem = m.group(1)
+            n = re.match(r"([A-ZÅÄÖ0-9]{%d})([0-9OISBZG]{1,3})(?=[^0-9OISBZG]|$)" % len(stem), P)
+            if n and n.group(1).translate(_TWIN_FOLD) == stem.translate(_TWIN_FOLD):
+                done = n.group(1) + n.group(2).translate(_TWIN_FOLD) + part[n.end():]
+                break
+        out.append(done)
+    return "/".join(out)
+
+
 @dataclass
 class LegendEntry:
     code: str
@@ -561,10 +587,21 @@ def _is_fire_class(w: str) -> bool:
     return len(w) >= 3 and w[0] == "E" and (w[1] == "I" or w[1].isdigit()) and w[-1].isdigit()
 
 
-def _words(text: str) -> list[str]:
+def _ends_with(word: str, tail: str, unread: int = 2) -> bool:
+    """Whether the word ends with tail, an unread character ('?') standing for any letter - at most `unread` of
+    them, and never more than leave four letters that do agree."""
+    if len(word) < len(tail):
+        return False
+    end = word[-len(tail):]
+    if any(a != b and a != "?" for a, b in zip(end, tail)):
+        return False
+    return end.count("?") <= unread and len(tail) - end.count("?") >= 4
+
+
+def _words(text: str, keep_unread: bool = False) -> list[str]:
     out, cur = [], []
     for ch in (text or "").upper():
-        if ch.isalpha() or ch.isdigit():
+        if ch.isalpha() or ch.isdigit() or (keep_unread and ch == "?"):
             cur.append(ch)
         elif cur:
             out.append("".join(cur)); cur = []
@@ -593,6 +630,14 @@ def role_from_words(description: str) -> str | None:
     # samma sammansättningsregel som för sakerna: TAPPKALLVATTEN är KALLVATTEN, TILLUFT är TILLUFT
     if any(any(w.endswith(sw) for sw in _disciplines.value("legend.SYSTEM_WORDS", SYSTEM_WORDS)) for w in ws):
         return "system"
+    # ...och KALLVATTENLEDNING är en ledning av kallvatten: mediet står före efterledet, inte sist. Ett blad med
+    # ritad text läser dessutom inte varje bokstav - "SPI??VATTEN?EDNING" - och ett oläst tecken är vilken
+    # bokstav som helst. Så ordet prövas med ett efterled LEDNING avskuret och med högst två olästa tecken,
+    # aldrig fler, i det som ska stämma.
+    for w in _words(description, keep_unread=True):
+        stems = [w] + ([w[:-len("LEDNING")]] if _ends_with(w, "LEDNING") else [])
+        if any(_ends_with(st, sw) for st in stems for sw in _disciplines.value("legend.SYSTEM_WORDS", SYSTEM_WORDS)):
+            return "system"
     for w in ws:
         if any(w.endswith(h) for h in MATERIAL_HEADS) or _is_fire_class(w):
             return "material"
@@ -668,6 +713,15 @@ def assign_roles(legend: DrawingLegend, designations, prior: dict[str, str] | No
                 c = owner(head, text)
                 if c:
                     opens.add(c)
+                    # A label naming two pipes drawn side by side writes both codes, the size once at the end:
+                    # `VV02-3-/KV02-3-15`. The second code opens a pipe as surely as the first - but it never
+                    # stands first, so read from the head alone the cold water code of a whole sheet was a
+                    # material. Each part after the slash that opens with a listed code opens it.
+                    for part in text.split("/")[1:]:
+                        toks = split_tokens(part)
+                        cp = owner(toks[0], part) if toks else None
+                        if cp:
+                            opens.add(cp)
         else:
             for c in codes:
                 if code_matches(text, c):

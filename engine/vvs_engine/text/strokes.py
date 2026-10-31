@@ -330,6 +330,11 @@ def cluster_rows(page: RawPage, comps: list[StrokeComponent], H: float,
         # row takes the direction of the nearest robust row when that direction is within reach of its own,
         # and only a row with no such neighbour falls back to the drawing's preferred directions.
         near = _nearest_anchor_angle(_centre(cs), anchors, 12.0 * H)
+        if near is not None and not _near_any(ang, [near], 20.0):
+            stacked = _stacked_baseline_angle(cs, H, [near], beside=True)
+            if stacked is not None:
+                rows.extend(_split_and_order(page, cs, H, stacked))
+                continue
         if strength < 4 and near is not None and _near_any(ang, [near], 20.0):
             ang = float(near)
         else:
@@ -341,16 +346,21 @@ def cluster_rows(page: RawPage, comps: list[StrokeComponent], H: float,
     return rows
 
 
-def _stacked_baseline_angle(cs: list[StrokeComponent], H: float, directions) -> float | None:
+def _stacked_baseline_angle(cs: list[StrokeComponent], H: float, directions, beside: bool = False) -> float | None:
     """Several short rows can have a vertical PCA axis without containing vertical text.
 
     Require separate baselines supported by full-height character positions:
     two rows of at least three characters, or three rows of at least two. Small fragments cannot vote for an orientation. This
     works in page coordinates at any established writing angle and does not use
     recognized words, system codes, or expected quantities.
+
+    beside: the one direction asked for is the one the text right beside the cluster runs in. Then two rows, one
+    of three characters and one of two, are enough - a list's codes, "S54" above "S6", stand that short, and the
+    open 4 of technical lettering is two pieces of which only one reaches full height. Read across them as one
+    column they were thrown out together, and the list lost both codes.
     """
     full = [c for c in cs if max(c.w, c.h) >= 0.65 * H]
-    if len(full) < 6:
+    if len(full) < (5 if beside else 6):
         return None
     candidates = []
     for angle in sorted(set(directions or (0.0, 90.0))):
@@ -381,6 +391,8 @@ def _stacked_baseline_angle(cs: list[StrokeComponent], H: float, directions) -> 
             if len(distinct) >= 2 and any(seed for _, seed in centres):
                 supported.append((pos, len(distinct), len(centres)))
         minimum_rows = 3 if any(s[1] == 2 for s in supported) else 2
+        if beside and len(supported) == 2 and max(s[1] for s in supported) >= 3:
+            minimum_rows = 2
         if len(supported) < minimum_rows or any(b[0]-a[0] < 0.9*H for a, b in zip(supported, supported[1:])):
             continue
         if sum(s[2] for s in supported) < 0.7 * len(full):

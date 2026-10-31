@@ -284,6 +284,11 @@ def reference_alphabet(embedded: tuple[tuple[str, bytes], ...] = ()) -> list[Ref
             img, ar, omap = rasterize_segments_oriented(segs)
             refs.append(RefGlyph(char=ch, font=f"hershey:{fname}", img=img, dt=distance_transform(img), aspect=ar,
                                  holes=HOLES.get(ch, 0), omap=omap, dt_bins=oriented_dts(img, omap)))
+        open_four = _open_four(glyphs.get("4") or [])
+        if open_four:
+            img, ar, omap = rasterize_segments_oriented(open_four)
+            refs.append(RefGlyph(char="4", font=f"hershey:{fname}:open", img=img, dt=distance_transform(img), aspect=ar,
+                                 holes=0, omap=omap, dt_bins=oriented_dts(img, omap)))
     for font in _REF_FONTS:
         for ch in CHARSET:
             img, ar = _render_reference(ch, font)
@@ -293,6 +298,31 @@ def reference_alphabet(embedded: tuple[tuple[str, bytes], ...] = ()) -> list[Ref
             refs.append(RefGlyph(char=ch, font=font, img=img, dt=distance_transform(img), aspect=ar, holes=HOLES.get(ch, 0),
                                  omap=omap, dt_bins=oriented_dts(img, omap)))
     return refs
+
+
+def _open_four(segs: list[Seg]) -> list[Seg]:
+    """The open form of a stroke-drawn 4: its stem begins between the apex and the crossbar instead of at the apex.
+
+    Lettering for technical drawings draws the 4 open, the diagonal and the stem never meeting, so it encloses
+    nothing. Measured only against closed 4s - a triangle and a hole - such a 4 scored just outside what is
+    accepted as a reading, and every label with a 4 in it was lost from a whole set of sheets: KB02-3-54,
+    S54-75, RV51-40. The open form is built from the closed one of the same alphabet, so both stand side by side
+    in the same proportions. A 4 drawn otherwise than as diagonal, crossbar and stem from the apex gets none."""
+    if len(segs) != 3:
+        return []
+    stems = [s for s in segs if abs(s.x0 - s.x1) < 1e-6]
+    bars = [s for s in segs if abs(s.y0 - s.y1) < 1e-6]
+    if len(stems) != 1 or len(bars) != 1:
+        return []
+    stem, bar = stems[0], bars[0]
+    top, bottom = min(stem.y0, stem.y1), max(stem.y0, stem.y1)
+    if not top < bar.y0 < bottom:
+        return []
+    diagonal = next(s for s in segs if s is not stem and s is not bar)
+    if abs(min(diagonal.y0, diagonal.y1) - top) > 1e-6:
+        return []                                   # the diagonal does not start at the stem's top: no apex to open
+    start = top + (bar.y0 - top) / 2.0
+    return [diagonal, bar, Seg(stem.x0, start, stem.x0, bottom)]
 
 
 def _render_reference(ch: str, font: str, buffer: bytes | None = None):
