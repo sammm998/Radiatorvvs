@@ -27,8 +27,10 @@ from .semantics.annotation import (AnnotationBlock, Designation, build_blocks, e
 from .text.model import project, row_axes
 from .semantics.attachment import (GeometryIndex, PathsByPlace, PipeCodeAnchor, family_of, layer_system_tokens,
                                    leader_contacts, resolve_block, system_layer_match)
-from .semantics.legend import DrawingLegend, adopt, assign_roles, opens_with, read_legend, roles_of
+from .semantics.legend import (DrawingLegend, adopt, assign_roles, number_as_listed, opens_with, read_legend,
+                               roles_of)
 from .semantics.declarations import Declarations, read_declarations
+from .semantics.grammar import split_tokens
 
 # Under measurement: whether a dimension on the row below means the label names a stack and nothing else. Off
 # until the reference set says otherwise - an earlier measurement on four drawings said stripping the run
@@ -1106,6 +1108,15 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
     else:
         legend = replace(legend, entries=[replace(e) for e in legend.entries])
     assign_roles(legend, designations, prior=roles_of(known_legend) if known_legend is not None else None)
+    # The system number a list's placeholder stands for is a number: written in digits, one system is one name
+    # however the strokes read it (legend.number_as_listed).
+    listed = [e.code for e in legend.entries if e.role == "system"]
+    for d in designations:
+        written = number_as_listed(d.text, listed) if listed else d.text
+        if written != d.text:
+            d.text = written
+            d.tokens = split_tokens(written)
+            d.system_token = d.tokens[0] if d.tokens else d.system_token
     if film and legend.entries:
         film.note("READING_DESIGNATIONS",
                   ("Handlingens lista" if not legend.own else "Bladets lista")

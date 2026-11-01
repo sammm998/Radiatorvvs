@@ -189,7 +189,7 @@ Tre ritkonventioner som läsningen läser som geometri, inte som antaganden (`pi
 
 En del blad är plottade ur CAD utan ett enda tecken som text: beteckningar, förteckning, stämpel och skalstockens
 siffror är streck. Läsningen tar texten ur strecken, och strecktexten förväxlar tecken som liknar varandra (O och 0,
-S och 5, I och 1, B och 8). Fyra regler gör att ett sådant blad mängdas i stället för att stå på 0 %:
+S och 5, I och 1, B och 8). Dessa regler gör att ett sådant blad mängdas i stället för att stå på 0 %:
 
 * **Förteckningens platshållare** (`semantics/legend.py`, `opens_with`). En förteckning kan skriva systemnumret som
   `XX` (`KVXX-3`, `VSXX-22`) och förklara det på en egen rad ("XX avser systembeteckning"). En etikett `KV02-3-15`
@@ -207,6 +207,23 @@ S och 5, I och 1, B och 8). Fyra regler gör att ett sådant blad mängdas i st�
 * **Ett blad som läser sin egen förteckning står rätt** (`pdf/orient.py`, `LIST_MIN`, 8). Vridningen väljer det håll
   där flest rörnamn läses. Läser bladet minst åtta av sina egna förteckningsrader som det ligger, och läser det
   vridna färre, vrids det inte: fler namn på tvären är tvillingläsningar, inte rör.
+
+* **Den öppna fyran** (`text/recognize.py`, `_open_four`). Teknisk textning ritar 4:an öppen: diagonalen och den
+  lodräta linjen möts inte, och tecknet sluter ingen yta. Mätt bara mot slutna fyror blev den "?", och varje
+  beteckning med en fyra försvann (KB02-3-54, S54-75, RV51-40). Den öppna formen byggs ur samma alfabets slutna
+  fyra: den lodräta linjen börjar mitt emellan spetsen och tvärstrecket.
+* **Korta kodrader staplade i en lista** (`text/strokes.py`, `_stacked_baseline_angle(beside=True)`). "S54" över
+  "S6" lästes som en kolumn och kastades. Bredvid en säker textrad räcker två rader, en med tre och en med två
+  tecken, för att läsa dem som rader i grannradens riktning.
+* **Mediet före LEDNING, genom olästa bokstäver** (`semantics/legend.py`, `role_from_words`). KALLVATTENLEDNING
+  är kallvatten, och SPI??VATTEN?EDNING är spillvatten: ett efterled LEDNING skärs av, och högst två olästa
+  tecken godtas i ordet.
+* **Senare led i en parbeteckning** (`assign_roles`). I `VV02-3-/KV02-3-15` öppnar KV ett rör lika säkert som VV.
+* **Systemnumret med siffror** (`number_as_listed`). Där en listkod säger att ett systemnummer står (KVXX-53),
+  skrivs KVO1 som KV01.
+* **Ett rörpar i vilken ordning som helst** (`pipes/ownership.py`, `identity_from_text`). `VV01-53-/KV01-53-20` och
+  `KV01-53-/VV01-53-20` är samma par. Hållna i skriven ordning gjorde de anspråk på samma rör, och röret blev
+  ingens.
 
 Ett inskannat blad med samma stämpel får ingen skala ur bilden: där skrivs skalan in för hand, och mängden granskas
 alltid.

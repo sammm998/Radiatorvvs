@@ -157,6 +157,17 @@ def identity_from_text(text: str, dn: int | None, system_token: str, dn_token_in
             end += 1
         stem_toks = toks[:idx] + toks[end:]
     stem = "-".join(stem_toks)
+    # A label naming two pipes laid side by side writes both codes and the size once: `VV01-53-/KV01-53-20`. The
+    # next label along the same pair writes them the other way round, `KV01-53-/VV01-53-20`, and it names the
+    # same two pipes. Held in the order written they were two identities claiming one run, the run was left to
+    # neither, and nine metres of it had no name. The parts are held in one order, whichever the label used.
+    parts = [p for p in core.split("/") if p.strip()]
+    if len(parts) >= 2 and dn is not None and not tail and idx == len(toks) - 1:
+        own = [[t.strip() for t in split_tokens(p) if t.strip()] for p in parts]
+        if len(own[-1]) >= 2 and own[-1][-1] == str(dn):
+            own[-1] = own[-1][:-1]
+            if all(o[0][:1].isalpha() and any(ch.isdigit() for ch in o[0]) for o in own):
+                stem = "/".join(sorted("-".join(o) for o in own))
     if service:
         stem += f"-({service})"
     qual = "-".join(tail) or None
