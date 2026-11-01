@@ -171,6 +171,10 @@ RULES: tuple[Rule, ...] = (
          "På ett blad med lagernamn läggs den andra läsarens streck bara till pennor som tagits som rör, pennor "
          "vars lager heter som deras, eller pennor dess egna etiketter landar på - inte till planens bakgrund.",
          "", True, None, None, "layers", True),
+    Rule("pipes.ownership.BRANCH_RUN_MAX_M", G_OWN, "Hur lång en radiatoranslutning får vara",
+         "Bladets anteckning \"radiatorer ansluts med dim. 12 om annat ej anges\" namnger korta onämnda grenar "
+         "som möter ett värmerör. En längre onämnd sträcka är en ledning vars etikett inte nåddes.",
+         "m", 6.0, 1.0, 20.0, None, True),
     Rule("pipeline.PEER_FOLLOWS_THE_BEST_LAYERS", G_LEADER, "En jämlike heter som de bästa pennorna",
          "På ett blad med lagernamn tas en penna som rör bredvid de bästa bara om dess lager följer samma "
          "namnmall som deras - arkitektens väggar på ett annat lager är ingen jämlike till rören.",

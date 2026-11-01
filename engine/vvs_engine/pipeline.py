@@ -1852,6 +1852,17 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
     # the rule for connection pipes names short runs; how short is a length in metres, so the scale comes first
     _mpp = scale.meters_per_pt if scale.meters_per_pt else None
     declared_max_pt = (_R("pipes.ownership.DECLARED_RUN_MAX_M", DECLARED_RUN_MAX_M) / _mpp) if _mpp else None
+    # the sheet's note for the fixtures it connects without a label (radiators, DN12): applied to short unnamed
+    # runs that meet one heating name, as the list calls it
+    from .pipes.ownership import BRANCH_RUN_MAX_M
+    def _heats(ident) -> bool:
+        code = legend.code_for((ident.display or "").upper()) if legend.entries else None
+        e = legend.by_code.get(code) if code else None
+        desc = (e.description or "").upper() if e else ""
+        return bool(re.search(r"V[ÄA]RMEB[ÄA]R|\bV[ÄA]RME\b|RADIATOR", desc)) and not re.search(r"[ÅA]TERVINN", desc)
+    branch_rule = (declarations.branches, _heats,
+                   (_R("pipes.ownership.BRANCH_RUN_MAX_M", BRANCH_RUN_MAX_M) / _mpp) if _mpp else None) \
+        if declarations.branches and _mpp else None
     identities = _identities_now()
     identities.update(native_identities)
     # vad som sitter vid varje fri ände, läst innan ägandet: det bevis en onämnd gren behöver för ett namn
@@ -1882,7 +1893,7 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
                     unknown_codes=unknown_codes, sheet_numbers=sheet_numbers,
                     run_labels=pipe_labels if other_runs else None))
                 return propagate(split_graphs, own, page.info.index, ids, spelled_out,
-                                 declared=declarations.connection_pipes, declared_max_pt=declared_max_pt,
+                                 declared=declarations.connection_pipes, declared_max_pt=declared_max_pt, branches=branch_rule,
                                  end_evidence=end_ev)
             ownership, source_assignment = native_analyze(graphs, native, page.info.index,
                 source_ask, elevations, page, host_reading)
@@ -1905,21 +1916,21 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
                 'labels': _native_label_marks(native)}
     else:
         ownership = propagate(graphs, anchors, page.info.index, identities, spelled_out,
-                              declared=declarations.connection_pipes, declared_max_pt=declared_max_pt, end_evidence=end_ev)
+                              declared=declarations.connection_pipes, declared_max_pt=declared_max_pt, branches=branch_rule, end_evidence=end_ev)
         if _settle_bundles_by_elimination(anchors, ownership, graphs):
             identities = _identities_now()
             ownership = propagate(graphs, anchors, page.info.index, identities, spelled_out,
-                              declared=declarations.connection_pipes, declared_max_pt=declared_max_pt, end_evidence=end_ev)
+                              declared=declarations.connection_pipes, declared_max_pt=declared_max_pt, branches=branch_rule, end_evidence=end_ev)
         # and what one bundle at a time cannot settle, the sheet taken as a whole sometimes can
         if settle_bundles_by_sheet_consistency(anchors, graphs, known_families):
             identities = _identities_now()
             ownership = propagate(graphs, anchors, page.info.index, identities, spelled_out,
-                              declared=declarations.connection_pipes, declared_max_pt=declared_max_pt, end_evidence=end_ev)
+                              declared=declarations.connection_pipes, declared_max_pt=declared_max_pt, branches=branch_rule, end_evidence=end_ev)
         # ...and last, what the sheet's own settled bundles say about the order its rows are written in
         if _settle_bundles_by_the_sheets_own_row_order(anchors, page):
             identities = _identities_now()
             ownership = propagate(graphs, anchors, page.info.index, identities, spelled_out,
-                              declared=declarations.connection_pipes, declared_max_pt=declared_max_pt, end_evidence=end_ev)
+                              declared=declarations.connection_pipes, declared_max_pt=declared_max_pt, branches=branch_rule, end_evidence=end_ev)
         _close_labels_on_owned_runs(anchors, ownership, graphs)
     film.pipes(ownership.pipes)
     t0 = _t(timings, "physical_pipes_ms", t0)
