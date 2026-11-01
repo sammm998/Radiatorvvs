@@ -398,7 +398,10 @@ class Designation:
 # "VG1.67"), or the two are written apart ("CL 2690", handled separately). A tag and a bare integer run together
 # is a code, not a level - a system code names itself that way ("S12", "DBA1"), and reading those as elevations
 # hides every designation a drawing writes without a separator.
-ELEV_RE = re.compile(r"^([A-ZÅÄÖ]{1,4})\s*([+\-]\s*\d+[.,]?\d*|\d+[.,]\d+)$")
+# A level read from strokes loses its decimal comma to a slash as often as not: "VG+28,46" came out "VG+28/46",
+# was no level any more, and was taken for a pipe of size 28 that competed with the pipes it stood beside. After a
+# sign, a slash between two numbers is that comma; a pipe name never puts a sign after its system code.
+ELEV_RE = re.compile(r"^([A-ZÅÄÖ]{1,4})\s*([+\-]\s*\d+(?:[.,/]\d+|[.,])?|\d+[.,]\d+)$")
 
 
 def _norm_number(t: str) -> str:

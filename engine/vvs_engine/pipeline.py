@@ -1365,6 +1365,12 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
         best_ticks = max((tick_votes[f] for f in chain_voted), default=0)
         best_votes = max((votes[f] for f in chain_voted), default=0.0)
         best_leaders = max((leader_votes[f] for f in chain_voted), default=0)
+        layered = [g for g in chain_voted if g.split("|s|")[0]]
+
+        def template_support(layer_name: str) -> int:
+            return sum(tick_votes[g] + leader_votes[g] for g in layered
+                       if _layer_template_similar(layer_name, g.split("|s|")[0]))
+        best_template_support = max((template_support(g.split("|s|")[0]) for g in layered), default=0)
         for f in voted:
             if not chain_like(f):
                 continue
@@ -1388,8 +1394,13 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
                 continue
             similar = any(_layer_template_similar(layer, tl) for tl in token_layers)
             accept = (token_votes[f] >= 1) or (tick_votes[f] >= 2 and similar) \
-                or (tick_votes[f] >= 3 and style in token_styles) or (tick_votes[f] >= 5 and tick_votes[f] / total_ticks >= 0.15)
-            peer = not accept and not token_fams and (
+                or (tick_votes[f] >= 3 and style in token_styles)
+            # ...and a pen carrying a good share of all the ticks is weighed the same way as a peer below: on a sheet
+            # with layer names the interior designer's `I40_p270|I050` carried five ticks of labels whose leaders
+            # crossed it on their way to the pipes, was taken as pipe, and brought its own pen and template along
+            # into the families gathered after it.
+            share = not accept and tick_votes[f] >= 5 and tick_votes[f] / total_ticks >= 0.15
+            peer = share or not accept and not token_fams and (
                 (tick_votes[f] >= 2 and tick_votes[f] >= _R("pipeline.PEER_SHARE", PEER_SHARE) * best_ticks)
                 or (votes[f] >= 5 and votes[f] >= _R("pipeline.PEER_SHARE", PEER_SHARE) * best_votes)
                 or (leader_votes[f] >= _R("pipeline.PEER_LABELS_MIN", PEER_LABELS_MIN) and leader_votes[f] >= _R("pipeline.PEER_SHARE", PEER_SHARE) * best_leaders))
@@ -1399,12 +1410,11 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
             # leaders end on a wall: the walls were taken as a peer of the pipes, the toilets' walls measured
             # ninety-one metres of water pipe and the facade sixty-eight metres of heating. On a sheet without
             # layer names nothing changes.
+            # The pipes' template is the one the sheet's labels reach most, all its pens taken together: a single
+            # pen of another template can tie the best pipe pen (the interior's I050 carried six ticks, as many
+            # as the best heating pen) without the sheet's labels being about it.
             if peer and layer and _R("pipeline.PEER_FOLLOWS_THE_BEST_LAYERS", PEER_FOLLOWS_THE_BEST_LAYERS):
-                strongest = [g.split("|s|")[0] for g in chain_voted
-                             if g.split("|s|")[0] and ((best_ticks and tick_votes[g] == best_ticks)
-                                                       or (best_votes and votes[g] == best_votes)
-                                                       or (best_leaders and leader_votes[g] == best_leaders))]
-                if strongest and not any(_layer_template_similar(layer, s) for s in strongest):
+                if template_support(layer) < best_template_support:
                     peer = False
             accept = accept or peer
             # A leader that ends on a valve or a floor drain and only then reaches the pipe leaves no tick on the

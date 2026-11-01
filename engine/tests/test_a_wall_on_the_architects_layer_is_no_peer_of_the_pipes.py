@@ -27,7 +27,7 @@ def _label(page, x, y, text, to):
     page.draw_line((to[0] - 2, to[1] + 2), (to[0] + 2, to[1] - 2), width=LEAD, color=(0, 0, 0))
 
 
-def _sheet(path):
+def _sheet(path, interior=False):
     doc = pymupdf.open()
     page = doc.new_page(width=1191, height=842)
     kb = doc.add_ocg("v50_p270|V-55512")
@@ -38,12 +38,18 @@ def _sheet(path):
     for a, b in (((800, 200), (1000, 200)), ((1000, 200), (1000, 500)), ((1000, 500), (800, 500)),
                  ((800, 500), (800, 200))):
         page.draw_line(a, b, width=WALL, color=(0, 0, 0), oc=wall)
-    for x in (150.0, 350.0, 550.0):
+    for x in (110.0, 200.0, 290.0, 380.0, 470.0, 560.0):
         _label(page, x, 250.0, "KB02-3-35", (x + 70, 300.0))
-    for x in (150.0, 350.0, 550.0):
+    for x in (110.0, 200.0, 290.0, 380.0, 470.0, 560.0):
         _label(page, x, 360.0, "VS02-22-15", (x + 70, 400.0))
     for y in (260.0, 420.0):
         _label(page, 1040.0, y - 40, "VV02-3-20", (1000.0, y))
+    if interior:
+        # the interior designer's fittings on their own xref: five labels' ticks land on its long lines
+        fit = doc.add_ocg("I40_p270|I050")
+        page.draw_line((100, 600), (700, 600), width=WALL, color=(0, 0, 0), oc=fit)
+        for x in (110.0, 230.0, 350.0, 470.0, 590.0):
+            _label(page, x, 560.0, "VV02-3-16", (x + 70, 600.0))
     page.insert_text((100, 800), "SKALA 1:100", fontsize=10, fontname="helv")
     doc.save(path)
     doc.close()
@@ -65,3 +71,15 @@ def test_the_pipes_are_measured_and_the_walls_are_not(tmp_path):
 def test_without_the_rule_the_walls_become_pipe(tmp_path):
     rows = _rows(_sheet(str(tmp_path / "plan.pdf")), {"pipeline.PEER_FOLLOWS_THE_BEST_LAYERS": False})
     assert rows.get("VV02-3-20", 0) > 5.0, rows
+
+
+def test_a_pen_with_a_share_of_the_ticks_on_another_template_is_not_pipe(tmp_path):
+    """Five ticks on the interior designer's lines are a good share of the sheet's ticks, and still no pipe."""
+    rows = _rows(_sheet(str(tmp_path / "plan.pdf"), interior=True))
+    assert rows.get("KB02-3-35", 0) > 15 and rows.get("VS02-22-15", 0) > 15, rows
+    assert rows.get("VV02-3-16", 0) < 1.0, rows
+
+
+def test_without_the_rule_the_interior_lines_become_pipe(tmp_path):
+    rows = _rows(_sheet(str(tmp_path / "plan.pdf"), interior=True), {"pipeline.PEER_FOLLOWS_THE_BEST_LAYERS": False})
+    assert rows.get("VV02-3-16", 0) > 5.0, rows
