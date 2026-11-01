@@ -225,6 +225,20 @@ S och 5, I och 1, B och 8). Dessa regler gör att ett sådant blad mängdas i st
   `KV01-53-/VV01-53-20` är samma par. Hållna i skriven ordning gjorde de anspråk på samma rör, och röret blev
   ingens.
 
+* **En jämlike heter som rörpennorna** (`pipeline.PEER_FOLLOWS_THE_BEST_LAYERS`). Jämlike-regeln - en penna som
+  bär en rimlig andel av etiketternas ändar tas som rör bredvid den bästa - är skriven för blad utan lagernamn.
+  På ett blad där rören ligger på `v50_p270|V-55512` och arkitektens väggar på `A30_p270|A040` tog två
+  hänvisningslinjer som slutade på en vägg väggarna som rör: 91 m vatten runt toaletterna, 68 m värme längs
+  fasaden. Har pennorna lagernamn måste en jämlike följa samma namnmall som de starkaste rörpennorna.
+* **Bara rörbeteckningar kan göra ett lager till ett annat systems** (`pipeline.CONFLICT_ONLY_WITH_PIPE_LABELS`).
+  En snittmarkering skriver ritningen snittet står på, "V50-02-271", och dess V50 är samma prefix som bladets
+  lager bär. Räknad som system gjorde den varje rörlager till "V50:s lager" och varje etikett till en
+  konflikt - ett helt blad mätte ingenting. Bara system som bladets rörbeteckningar (enligt listan) namnger räknas.
+* **Den andra läsarens streck följer rörlagren** (`source_rules.native_bridge.NATIVE_JOINS_THE_PIPE_LAYERS`). Den
+  tar varje långt streck för rör. Planens bakgrund (`pr1_0200A|P-------O-`) kom tillbaka som 45 m onämnt rör på
+  varje blad. På ett blad med lagernamn läggs strecken bara till pennor som tagits som rör, pennor vars lager heter
+  som deras, eller pennor dess egna etiketter landar på.
+
 Ett inskannat blad med samma stämpel får ingen skala ur bilden: där skrivs skalan in för hand, och mängden granskas
 alltid.
 

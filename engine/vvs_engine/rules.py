@@ -162,6 +162,19 @@ RULES: tuple[Rule, ...] = (
          "rita, och tas inte som rör. Den måste ha ritat så här många streck innan \"varenda ett\" säger "
          "något om den.",
          "antal", 8, 2, 50, "layers", True),
+    Rule("pipeline.CONFLICT_ONLY_WITH_PIPE_LABELS", G_LEADER, "Bara rörbeteckningar kan göra ett lager till ett annat systems",
+         "En hänvisning till ett annat blad (SE RITNING V50-01-2712) har en etiketts form, och dess V50 är samma "
+         "prefix som bladets egna lager bär. Bara system som bladets rörbeteckningar namnger kan säga att ett lager "
+         "hör till ett annat rör.",
+         "", True, None, None, "layers", True),
+    Rule("source_rules.native_bridge.NATIVE_JOINS_THE_PIPE_LAYERS", G_PIPE, "Den andra läsarens streck följer rörlagren",
+         "På ett blad med lagernamn läggs den andra läsarens streck bara till pennor som tagits som rör, pennor "
+         "vars lager heter som deras, eller pennor dess egna etiketter landar på - inte till planens bakgrund.",
+         "", True, None, None, "layers", True),
+    Rule("pipeline.PEER_FOLLOWS_THE_BEST_LAYERS", G_LEADER, "En jämlike heter som de bästa pennorna",
+         "På ett blad med lagernamn tas en penna som rör bredvid de bästa bara om dess lager följer samma "
+         "namnmall som deras - arkitektens väggar på ett annat lager är ingen jämlike till rören.",
+         "", True, None, None, "layers", True),
     Rule("pipeline.WRITING_PEN_TICKED_LABELS", G_LEADER, "...utom där etiketterna märkt pennan",
          "En penna som så här många av bladets etiketter satt sitt märke på ritar rör, också där varje streck "
          "råkar sluta vid något läsningen tog för text.",

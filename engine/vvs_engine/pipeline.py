@@ -78,6 +78,8 @@ LEADER_MIN_SHARE = 0.25
 LEADER_INK_SHARE = 0.5     # a nameless pen is the leader pen when its leaders are most of what it draws
 PEER_SHARE = 0.15          # a drawn family carrying this much of the best family's label ends is a peer of it
 PEER_LABELS_MIN = 2        # and two of the sheet's own labels pointing at it is the least that can say so
+PEER_FOLLOWS_THE_BEST_LAYERS = True   # on a sheet with layer names a peer is named the way the best pens are
+CONFLICT_ONLY_WITH_PIPE_LABELS = True  # only a pipe label's system can make a layer another system's
 WRITING_PEN_TICKED_LABELS = 2   # labels that left their tick on a pen: it draws what they name, whatever else it touches
 # and with no layer name to vouch for it, this share of the sheet's own pipe labels must have reached it
 LABELS_MUST_REACH = 0.15
@@ -1163,6 +1165,13 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
     spelled_out = layer_system_tokens(page)      # the system names the file writes on layers of its own
 
     named_systems = {d.system_token for d in designations if d.did in pipe_labels}
+    # The systems a layer name may be found to contradict: those the sheet's pipe labels name. A reference to
+    # another sheet - "FORTS. SE RITNING V50-01-2712" - has a label's shape and its "V50" is the very prefix the
+    # set's own layers carry (`v50_p270|V-55512`), so counted as a system it made every pipe layer of the sheet
+    # "V50's layer", every pipe label on it a conflict, and the sheet measured nothing. Only what names a pipe
+    # can say a layer belongs to another pipe.
+    conflict_tokens = named_systems if _R("pipeline.CONFLICT_ONLY_WITH_PIPE_LABELS", CONFLICT_ONLY_WITH_PIPE_LABELS) \
+        else system_tokens
     named_pipe_layers = {layer for layer in {p.layer for p in page.paths if p.layer}
                          if any(system_layer_match(token, layer, spelled_out)
                                 for token in named_systems)}
@@ -1379,10 +1388,25 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
                 continue
             similar = any(_layer_template_similar(layer, tl) for tl in token_layers)
             accept = (token_votes[f] >= 1) or (tick_votes[f] >= 2 and similar) \
-                or (tick_votes[f] >= 3 and style in token_styles) or (tick_votes[f] >= 5 and tick_votes[f] / total_ticks >= 0.15) \
-                or (not token_fams and tick_votes[f] >= 2 and tick_votes[f] >= _R("pipeline.PEER_SHARE", PEER_SHARE) * best_ticks) \
-                or (not token_fams and votes[f] >= 5 and votes[f] >= _R("pipeline.PEER_SHARE", PEER_SHARE) * best_votes) \
-                or (not token_fams and leader_votes[f] >= _R("pipeline.PEER_LABELS_MIN", PEER_LABELS_MIN) and leader_votes[f] >= _R("pipeline.PEER_SHARE", PEER_SHARE) * best_leaders)
+                or (tick_votes[f] >= 3 and style in token_styles) or (tick_votes[f] >= 5 and tick_votes[f] / total_ticks >= 0.15)
+            peer = not accept and not token_fams and (
+                (tick_votes[f] >= 2 and tick_votes[f] >= _R("pipeline.PEER_SHARE", PEER_SHARE) * best_ticks)
+                or (votes[f] >= 5 and votes[f] >= _R("pipeline.PEER_SHARE", PEER_SHARE) * best_votes)
+                or (leader_votes[f] >= _R("pipeline.PEER_LABELS_MIN", PEER_LABELS_MIN) and leader_votes[f] >= _R("pipeline.PEER_SHARE", PEER_SHARE) * best_leaders))
+            # A peer is a pen measured against the best pen, for sheets where no layer name says which pens are
+            # pipe. Where the pens do carry layer names, a peer has to be named the way the best pens are. A sheet
+            # whose pipes lie on `v50_p270|V-55512` and the architect's walls on `A30_p270|A040` had two labels'
+            # leaders end on a wall: the walls were taken as a peer of the pipes, the toilets' walls measured
+            # ninety-one metres of water pipe and the facade sixty-eight metres of heating. On a sheet without
+            # layer names nothing changes.
+            if peer and layer and _R("pipeline.PEER_FOLLOWS_THE_BEST_LAYERS", PEER_FOLLOWS_THE_BEST_LAYERS):
+                strongest = [g.split("|s|")[0] for g in chain_voted
+                             if g.split("|s|")[0] and ((best_ticks and tick_votes[g] == best_ticks)
+                                                       or (best_votes and votes[g] == best_votes)
+                                                       or (best_leaders and leader_votes[g] == best_leaders))]
+                if strongest and not any(_layer_template_similar(layer, s) for s in strongest):
+                    peer = False
+            accept = accept or peer
             # A leader that ends on a valve or a floor drain and only then reaches the pipe leaves no tick on the
             # pipe itself, and a sum of contact weights counts one label several times when its leader runs along
             # several pieces of the same family. Neither says what a reader would say, which is simply: how many
@@ -1485,7 +1509,7 @@ def analyze_page(page: RawPage, progress: Callable[[str], None] | None = None, o
             contacts = leader_contacts(ld, gidx, pf, paths, ticks_across=not from_image)
             if not contacts and ld.length < 2.5 * max(block.height, 1.0) and not ld.end_marks:
                 continue        # dangling frame stub, not a leader
-            anchors.extend(resolve_block(block, rows, ld, contacts, system_tokens, spelled_out, paths, gidx))
+            anchors.extend(resolve_block(block, rows, ld, contacts, conflict_tokens, spelled_out, paths, gidx))
         anchors.sort(key=lambda a: a.anchor_id)
         stats = {"votes": dict(votes.most_common()), "token_votes": dict(token_votes.most_common()), "candidate_families": sorted(pipe_families), "tick_votes": dict(tick_votes.most_common()),
                  "leader_votes": dict(leader_votes.most_common()), "declined_families": declined,

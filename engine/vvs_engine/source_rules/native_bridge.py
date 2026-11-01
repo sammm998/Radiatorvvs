@@ -11,6 +11,10 @@ from ..pipes.ownership import identity_from_text
 from ..semantics.attachment import PipeCodeAnchor, Contact
 
 
+# on a sheet with layer names the native reader's strokes join only pens named the way the pipe pens are
+NATIVE_JOINS_THE_PIPE_LAYERS = True
+
+
 def _key(layer, width, rect):
     return layer, round(width, 2), tuple(round(v, 1) for v in rect)
 
@@ -90,12 +94,40 @@ def merge_detection(page, native, graphs, families, anchors, identities, elevati
             collect_prims(page, {fk}, exclude_pids=set(not_pipe) | set(lettering), figures_out=figures)
             standing[fk] = {(q.pid, q.seg_index) for q in figures.get(fk, ())}
         return (pid, i) in standing[fk]
+    # On a sheet whose pens carry layer names, the native reader's strokes join a pen the reading took as pipe, a
+    # pen whose layer is named the way those are, or a pen one of the native reader's own labels lands on. It
+    # takes every long stroke for a stretch, and a cooling plan's background - the plan's own xref on
+    # `pr1_0200A|P-------O-`, forty-five metres on every sheet of the set - came back as pipe nobody named, and
+    # the sheet reported forty-five metres of pipe it had missed.
+    from ..pipeline import _layer_template_similar
+    from .. import rules as _rules
+    host_layers = [f.split("|s|")[0] for f in families if f.split("|s|")[0]]
+    landed: set[str] = set()
+    nodes_by_id = {n['id']: n for n in native['graph']['nodes']}
+    for leader in native['association']['leaders']:
+        for landing in leader.get('landings', []):
+            node = nodes_by_id.get(landing.get('node'))
+            if node is None:
+                continue
+            for sid in node.get('stretches', []):
+                for pid in native_stretches.get(sid, {}).get('path_ids', []):
+                    if pid in mapped:
+                        q = mapped[pid]
+                        landed.add(stroke_family(q.layer, q.width, q.color))
+    foreign = 0
+
+    def joins(fk: str, layer: str) -> bool:
+        if not layer or not host_layers or not _rules.value("source_rules.native_bridge.NATIVE_JOINS_THE_PIPE_LAYERS", NATIVE_JOINS_THE_PIPE_LAYERS):
+            return True
+        return fk in families or fk in landed or any(_layer_template_similar(layer, h) for h in host_layers)
     for native_id in sorted(used):
         path = mapped.get(native_id)
         if path is None: continue
         if path.pid in not_pipe:
             leaders += 1; continue
         fk = stroke_family(path.layer, path.width, path.color)
+        if not joins(fk, path.layer):
+            foreign += 1; continue
         target = prims.setdefault(fk, {})
         # A path may already have been divided at leader contacts. Preserve its
         # existing pieces instead of reinstating the unsplit original as well.
@@ -169,5 +201,6 @@ def merge_detection(page, native, graphs, families, anchors, identities, elevati
             'added_primitives': added, 'added_label_contacts': contact_count,
             'native_paths_that_are_leaders': leaders,
             'native_strokes_of_drawn_figures': figure_strokes,
+            'native_strokes_on_layers_no_pipe_is_named_like': foreign,
             'unmatched_native_paths': len(set(used) - set(mapped)),
             'native_nodes': len(native_nodes), 'native_stretches': len(native_stretches)}
