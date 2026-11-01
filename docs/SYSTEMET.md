@@ -239,6 +239,12 @@ S och 5, I och 1, B och 8). Dessa regler gör att ett sådant blad mängdas i st
   varje blad. På ett blad med lagernamn läggs strecken bara till pennor som tagits som rör, pennor vars lager heter
   som deras, eller pennor dess egna etiketter landar på.
 
+* **Bladets anteckning om radiatorer** (`semantics/declarations.py`, `_declared_branch`; `pipes/ownership.py`,
+  `_declare_branches`, `BRANCH_RUN_MAX_M` 6 m). "RADIATORER ANSLUTES MED DIM. 12 OM ANNAT EJ ANGIVES" är
+  radiatoranslutningarnas etikett. En kort onämnd gren - eller en som lämnats i tvivel bara för att inget stod i
+  dess fria ände - som på samma penna möter namngivna rör av ett enda namn, ett namn listan kallar värme, får det
+  namnets stam i anteckningens dimension (VS02-22-15 ger VS02-22-12). Metrarna redovisas som deklarerade.
+
 Ett inskannat blad med samma stämpel får ingen skala ur bilden: där skrivs skalan in för hand, och mängden granskas
 alltid.
 

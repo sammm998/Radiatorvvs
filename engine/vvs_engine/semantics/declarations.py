@@ -38,6 +38,10 @@ from .grammar import dn_plausible, is_code_like, split_tokens
 TRIGGER_WORDS = ("KOPPLINGSLEDNING",)
 DEFAULT_PHRASES = ("OM INGET ANNAT ANGES", "OM EJ ANNAT ANGES", "OM INTE ANNAT ANGES", "OM INGET ANNAT",
                    "ENLIGT TABELL", "ENL TABELL", "ENL. TABELL")
+# the same rule as an older office writes it, for one kind of fixture: "RADIATORER ANSLUTES MED DIM. 12 OM
+# ANNAT EJ ANGIVES" - every radiator is connected in that size unless the drawing writes another
+BRANCH_FIXTURES = ("RADIATOR",)
+BRANCH_PHRASES = ("ANNAT EJ ANGIVES", "EJ ANNAT ANGIVES", "ANNAT EJ ANGES", "INGET ANNAT ANGIVES")
 STATEMENT_ROWS = 8.0        # the rows that make up the statement stand within this many row heights of the trigger
 WINDOW_ROWS = 14.0          # how far below the statement its table may start, in row heights
 TABLE_ROWS = 12.0           # how far below the header the dimension rows may run, in row heights
@@ -149,16 +153,29 @@ class DeclaredPipe:
                 "apparatus": list(self.apparatus), "text": self.text}
 
 
+@dataclass(frozen=True)
+class DeclaredBranch:
+    """A fixture the sheet says is connected in one size unless it writes another: radiators, DN12."""
+    fixture: str                   # RADIATOR
+    dn: int
+    statement: str                 # the row as written
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"fixture": self.fixture, "dn": self.dn, "statement": self.statement}
+
+
 @dataclass
 class Declarations:
     connection_pipes: list[DeclaredPipe] = field(default_factory=list)
     statement: list[str] = field(default_factory=list)      # the rows that state the rule, as written
+    branches: list[DeclaredBranch] = field(default_factory=list)
 
     def __bool__(self) -> bool:
-        return bool(self.connection_pipes)
+        return bool(self.connection_pipes) or bool(self.branches)
 
     def as_dict(self) -> dict[str, Any]:
-        return {"connection_pipes": [d.as_dict() for d in self.connection_pipes], "statement": list(self.statement)}
+        return {"connection_pipes": [d.as_dict() for d in self.connection_pipes], "statement": list(self.statement),
+                "branches": [b.as_dict() for b in self.branches]}
 
 
 def _bands(rows: list[TextRow], tol: float) -> list[list[TextRow]]:
@@ -190,10 +207,36 @@ def _inline_defaults(text: str) -> dict[str, set[int]]:
     return out
 
 
+_BRANCH_PHRASES = tuple(_phrase_pattern(p) for p in BRANCH_PHRASES)
+
+
+def _declared_branch(text: str) -> DeclaredBranch | None:
+    """`RADIATORER ANSLUTES MED DIM. 12 OM ANNAT EJ ANGIVES`: the fixture, and the one size it is connected in.
+
+    Only a row that names a fixture, a single dimension after DIM, and says that it holds unless something else
+    is written. A row that names two sizes, or no rule, declares nothing."""
+    t = _norm(text)
+    fixture = next((f for f in BRANCH_FIXTURES if f in t), None)
+    if fixture is None or not any(p.search(t) for p in _BRANCH_PHRASES):
+        return None
+    sizes = re.findall(r"\bDIM\.?\s*(\d{1,3})\b", t)
+    if len(set(sizes)) != 1 or not dn_plausible(int(sizes[0])):
+        return None
+    return DeclaredBranch(fixture, int(sizes[0]), text.strip())
+
+
 def read_declarations(lines: list[TextRow]) -> Declarations:
-    """The sheet's written rules for pipes it does not label: today the one about connection pipes."""
+    """The sheet's written rules for pipes it does not label: the connection pipes, and the fixtures connected in
+    one size unless the drawing writes another."""
     rows = [r for r in lines if r.text and r.text.strip() and r.glyphs is not None]
     out = Declarations()
+    for r in rows:
+        b = _declared_branch(r.text)
+        if b is not None and all(x.fixture != b.fixture or x.dn == b.dn for x in out.branches):
+            if all(x.fixture != b.fixture for x in out.branches):
+                out.branches.append(b)
+        elif b is not None:
+            out.branches = [x for x in out.branches if x.fixture != b.fixture]   # two sizes: no default
     for r in rows:
         t = _norm(r.text)
         if not any(w in t for w in TRIGGER_WORDS):

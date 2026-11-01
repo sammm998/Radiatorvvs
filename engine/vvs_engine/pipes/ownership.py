@@ -286,18 +286,21 @@ DECLARED_REASON = "DECLARED_CONNECTION_PIPE_BY_SHEET_TABLE"
 DECLARED_RUN_MAX_M = 15.0
 
 
-def _unowned_components(g: PipeGraph, st: dict[int, "PrimState"]) -> list[list[int]]:
-    """Connected sets of UNOWNED primitives: a run nobody named, taken as one piece."""
+def _unowned_components(g: PipeGraph, st: dict[int, "PrimState"], open_=None) -> list[list[int]]:
+    """Connected sets of UNOWNED primitives: a run nobody named, taken as one piece.
+
+    open_: which primitives count as open, when it is more than the UNOWNED ones."""
+    is_open = open_ or (lambda q: q.state == "UNOWNED")
     adj: dict[int, set[int]] = defaultdict(set)
     for pid, nodes in g.prim_nodes.items():
-        if st[pid].state != "UNOWNED":
+        if not is_open(st[pid]):
             continue
         for n in nodes:
             adj[n].add(pid)
     seen: set[int] = set()
     out: list[list[int]] = []
     for pid in sorted(g.prims):
-        if pid in seen or st[pid].state != "UNOWNED":
+        if pid in seen or not is_open(st[pid]):
             continue
         comp, stack = [], [pid]
         while stack:
@@ -378,10 +381,63 @@ def _declared_by_join(g: PipeGraph, st: dict[int, "PrimState"], comp: list[int],
     return fits[0]
 
 
+# A radiator connection runs from the heating pipe to the radiator: a few metres at most. A longer unnamed run on
+# the heating pen is a main whose label was not reached, and a note about radiators does not name it.
+BRANCH_RUN_MAX_M = 6.0
+
+
+def _declare_branches(graphs: dict[str, PipeGraph], states: dict[str, dict[int, "PrimState"]], branches) -> int:
+    """The short runs no label reached, named by the sheet's note for the fixtures they connect.
+
+    "RADIATORER ANSLUTES MED DIM. 12 OM ANNAT EJ ANGIVES": a radiator is connected in DN12 unless the drawing
+    writes another size. Its connection leaves the heating pipe and is never labelled - the note is its label. So
+    an UNOWNED run on a pen, short enough to be a connection and meeting named pipes of exactly one name on that
+    same pen, a name the list calls heating, takes that name's stem in the note's size. A run that meets two
+    names, none, or one that is not heating keeps no name; nothing is guessed.
+
+    A branch the reading left in doubt for want of anything at its free end - a single name at the junction, and
+    no evidence that a pipe goes on (UNLABELLED_BRANCH_WITHOUT_END_EVIDENCE) - is open to the note too: the note
+    is that evidence. A branch in doubt between two names is not."""
+    declared, heats, max_pt = branches
+    if not declared:
+        return 0
+    from ..semantics.grammar import split_tokens
+    n = 0
+    for fk, g in graphs.items():
+        st = states[fk]
+        for comp in _unowned_components(g, st, lambda q: q.state == "UNOWNED" or (
+                q.state == "AMBIGUOUS" and q.reason == NO_END_EVIDENCE)):
+            run = sum(g.prims[pid].seg.length for pid in comp)
+            if max_pt is not None and run > max_pt:
+                continue
+            nodes = {nd for pid in comp for nd in g.prim_nodes[pid]}
+            inside = set(comp)
+            met = {st[pid].identity for pid, ns in g.prim_nodes.items()
+                   if pid not in inside and st[pid].state == "CONFIRMED" and st[pid].identity is not None
+                   and nodes.intersection(ns)}
+            stems = {(i.stem, i.system) for i in met}
+            if len(stems) != 1:
+                continue
+            ident0 = next(iter(met))
+            if not heats(ident0):
+                continue
+            d = declared[0]
+            text = f"{ident0.stem}-{d.dn}"
+            ident = identity_from_text(text, d.dn, ident0.system, len(split_tokens(ident0.stem)))
+            for pid in comp:
+                q = st[pid]
+                q.state, q.identity, q.reason = "CONFIRMED", ident, DECLARED_REASON
+                # the reason is kept among the evidence as well: a reading that borrows this piece keeps its
+                # own reason, and the takeoff still has to show that these metres were declared, not pointed at
+                q.evidence = [DECLARED_REASON, f"sheet_note:{d.fixture}:DN{d.dn}", "system_from_the_pipe_it_joins"]
+                n += 1
+    return n
+
+
 def propagate(graphs: dict[str, PipeGraph], anchors: list[PipeCodeAnchor], page: int,
               identities: dict[str, Identity], spelled_out: frozenset[str] = frozenset(),
               declared=None, declared_max_pt: float | None = None,
-              end_evidence: dict[str, dict[int, dict]] | None = None) -> OwnershipResult:
+              end_evidence: dict[str, dict[int, dict]] | None = None, branches=None) -> OwnershipResult:
     """identities: anchor_id -> Identity (only anchors that are verified AND belong to pipe-designation families).
     declared: the sheet's written rules for unlabelled pipes (semantics.declarations.DeclaredPipe), applied last
     and only to geometry every other reading left unowned.
@@ -409,6 +465,7 @@ def propagate(graphs: dict[str, PipeGraph], anchors: list[PipeCodeAnchor], page:
     for fk, g in graphs.items():
         _pair_unowned_runs(g, states[fk])
     given = _declare_unowned(graphs, states, list(declared), spelled_out, declared_max_pt) if declared else {}
+    branched = _declare_branches(graphs, states, branches) if branches else 0
     pipes: list[PhysicalPipe] = []
     for fk, g in graphs.items():
         pipes.extend(_build_pipes(g, states[fk], fk, page))
@@ -420,6 +477,8 @@ def propagate(graphs: dict[str, PipeGraph], anchors: list[PipeCodeAnchor], page:
     out = dict(stats)
     if given:
         out["declared_prims"] = sum(given.values())
+    if branched:
+        out["declared_branch_prims"] = branched
     return OwnershipResult(prim_states=states, pipes=pipes, ambiguous_runs=ambiguous_runs, stats=out)
 
 
