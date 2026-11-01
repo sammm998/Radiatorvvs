@@ -229,7 +229,12 @@ S och 5, I och 1, B och 8). Dessa regler gör att ett sådant blad mängdas i st
   bär en rimlig andel av etiketternas ändar tas som rör bredvid den bästa - är skriven för blad utan lagernamn.
   På ett blad där rören ligger på `v50_p270|V-55512` och arkitektens väggar på `A30_p270|A040` tog två
   hänvisningslinjer som slutade på en vägg väggarna som rör: 91 m vatten runt toaletterna, 68 m värme längs
-  fasaden. Har pennorna lagernamn måste en jämlike följa samma namnmall som de starkaste rörpennorna.
+  fasaden. Har pennorna lagernamn måste en jämlike följa den namnmall som bladets etiketter når mest, alla
+  dess pennor tagna tillsammans. Detsamma gäller en penna som tas för att den bär en stor andel av märkena:
+  inredningens `I40_p270|I050` bar sex märken av hänvisningslinjer på väg till rören och drog med sig 190 m
+  onämnd "rörgeometri".
+* **En höjd vars decimalkomma lästs som snedstreck är en höjd** (`semantics/annotation.py`, `ELEV_RE`).
+  "VG+28,46" lästes "VG+28/46", blev en beteckning med dimension 28 och tävlade med rören den stod över.
 * **Bara rörbeteckningar kan göra ett lager till ett annat systems** (`pipeline.CONFLICT_ONLY_WITH_PIPE_LABELS`).
   En snittmarkering skriver ritningen snittet står på, "V50-02-271", och dess V50 är samma prefix som bladets
   lager bär. Räknad som system gjorde den varje rörlager till "V50:s lager" och varje etikett till en
